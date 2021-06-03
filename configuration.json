@@ -1,0 +1,39 @@
+[
+  {
+    "key": "ClientID",
+    "type": "input",
+    "defaultValue": "",
+    "templateOptions": {
+      "label": "ClientID",
+      "required": true
+    }
+  },
+  {
+    "key": "ClientSecret",
+    "type": "input",
+    "defaultValue": "",
+    "templateOptions": {
+      "label": "ClientSecret",
+      "required": true
+    }
+  },
+  {
+    "key": "BaseUrl",
+    "type": "input",
+    "defaultValue": "",
+    "templateOptions": {
+      "label": "BaseUrl",
+      "placeholder": "https://SomeCoolApp/v1/scim",
+      "required": true
+    }
+  },
+  {
+    "key": "IsConnectionTls12",
+    "type": "checkbox",
+    "defaultValue": true,
+    "templateOptions": {
+      "label": "Enables TLS1.2",
+      "required": false
+    }
+  }
+]
