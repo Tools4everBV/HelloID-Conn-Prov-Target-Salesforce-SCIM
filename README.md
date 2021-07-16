@@ -1,7 +1,7 @@
 # HelloID-Conn-Prov-Target-SalesForce-SCIM
 
 <p align="center">
-  <img src="Assets/logo.png">
+  <img src="./assets/logo.png">
 </p>
 
 ## Table of contents
