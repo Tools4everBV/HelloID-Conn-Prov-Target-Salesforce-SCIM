@@ -5,6 +5,7 @@
     "defaultValue": "",
     "templateOptions": {
       "label": "ClientID",
+      "description": "The ClientID for the SalesForce SCIM API.",
       "required": true
     }
   },
@@ -13,7 +14,9 @@
     "type": "input",
     "defaultValue": "",
     "templateOptions": {
+      "type": "password",
       "label": "ClientSecret",
+      "description": "The ClientSecret for the SalesForce SCIM API.",
       "required": true
     }
   },
@@ -23,17 +26,9 @@
     "defaultValue": "",
     "templateOptions": {
       "label": "BaseUrl",
-      "placeholder": "https://SomeCoolApp/v1/scim",
+      "description": "The URL to the SalesForce environment. Like [https://mycompany.my.salesforce.com]",
+      "placeholder": "https://mycompany.my.salesforce.com",
       "required": true
-    }
-  },
-  {
-    "key": "IsConnectionTls12",
-    "type": "checkbox",
-    "defaultValue": true,
-    "templateOptions": {
-      "label": "Enables TLS1.2",
-      "required": false
     }
   }
 ]
