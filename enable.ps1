@@ -1,5 +1,5 @@
 #####################################################
-# HelloID-Conn-Prov-Target-Generic-Scim-Enable
+# HelloID-Conn-Prov-Target-Salesforce-Enable
 #
 # Version: 1.0.0.1
 #####################################################
