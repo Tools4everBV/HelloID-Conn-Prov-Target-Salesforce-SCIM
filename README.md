@@ -28,9 +28,9 @@ The following settings are required to connect to the API.
 
 | Setting     | Description |
 | ------------ | ----------- |
-| ClientID | The ClientID for the SCIM API                      |
-| ClientSecret | The ClientSecret for the SCIM API                  |
-| Uri | The Uri to the SCIM API. <http://<your-application> |
+| ClientID | The ClientID for the SCIM API |
+| ClientSecret | The ClientSecret for the SCIM API |
+| BaseUrl | The Uri to the SCIM API. <http://<your-application> |
 
 ### Prerequisites
 
@@ -44,9 +44,9 @@ The connector is created for both Windows PowerShell 5.1 and PowerShell Core. Th
 
 ## Getting help
 
-> _For more information on how to configure a HelloID PowerShell connector, please refer to our [documentation](https://docs.helloid.com/hc/en-us/articles/360012518799-How-to-add-a-target-system) pages_
+> _For more information on how to configure a HelloID PowerShell connector, please refer to our [documentation](https://docs.helloid.com/hc/en-us/articles/360012518799-How-to-add-a-target-system)
 
-> _If you need help, feel free to ask questions on our [forum](https://forum.helloid.com)_
+> _If you need help, feel free to ask questions on our [forum](https://forum.helloid.com)
 
 ## HelloID Docs
 
