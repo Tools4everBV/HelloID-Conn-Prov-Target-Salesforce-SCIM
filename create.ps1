@@ -199,10 +199,10 @@ try {
     $lookup = $responseAllUsers.Resources | Group-Object -Property 'ExternalId' -AsHashTable
     $userObject = $lookup[$account.ExternalId]
     if ($userObject){
-        Write-Verbose "Account for '$($account.DisplayName)' found with id '$($userObject.id)', switching to 'correlate'"
+        Write-Verbose "Account for '$($p.DisplayName)' found with id '$($userObject.id)', switching to 'correlate'"
         $action = 'Correlate'
     } else {
-        Write-Verbose "No account for '$($account.DisplayName)' has been found, switching to 'create'"
+        Write-Verbose "No account for '$($p.DisplayName)' has been found, switching to 'create'"
         $action = 'Create'
     }
 
