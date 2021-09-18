@@ -13,24 +13,14 @@ $success = $false
 $auditLogs = New-Object Collections.Generic.List[PSCustomObject]
 
 #region Helper Functions
-function Get-GenericScimOAuthToken {
-    <#
-    .SYNOPSIS
-    Retrieves the OAuth token from a SCIM API <http://www.simplecloud.info/>
-
-    .PARAMETER ClientID
-    The ClientID for the SCIM API
-
-    .PARAMETER ClientSecret
-    The ClientSecret for the SCIM API
-    #>
+function Get-ScimOAuthToken {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         [string]
         $ClientID,
 
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory)]
         [string]
         $ClientSecret
     )
@@ -47,16 +37,9 @@ function Get-GenericScimOAuthToken {
             grant_type    = "client_credentials"
         }
 
-        $splatRestMethodParameters = @{
-            Uri     = 'https://login.salesforce.com/services/oauth2/token'
-            Method  = 'POST'
-            Headers = $headers
-            Body    = $body
-        }
-        Invoke-RestMethod @splatRestMethodParameters
+        Invoke-RestMethod -Uri 'https://login.salesforce.com/services/oauth2/token' -Method 'POST' -Body $body -Headers $headers
         Write-Verbose 'Finished retrieving accessToken'
-    }
-    catch {
+    } catch {
         $PSCmdlet.ThrowTerminatingError($PSItem)
     }
 }
@@ -93,7 +76,7 @@ if (-not($dryRun -eq $true)) {
     try {
         Write-Verbose "Enabling account '$($aRef)' for '$($personObj.DisplayName)'"
         Write-Verbose "Retrieving accessToken"
-        $accessToken = Get-GenericScimOAuthToken -ClientID $($config.ClientID) -ClientSecret $($config.ClientSecret)
+        $accessToken = Get-ScimOAuthToken -ClientID $($config.ClientID) -ClientSecret $($config.ClientSecret)
 
         [System.Collections.Generic.List[object]]$operations = @()
 
