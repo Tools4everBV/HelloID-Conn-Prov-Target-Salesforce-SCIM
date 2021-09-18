@@ -51,8 +51,7 @@ function Get-ScimOAuthToken {
 
         Invoke-RestMethod -Uri 'https://login.salesforce.com/services/oauth2/token' -Method 'POST' -Body $body -Headers $headers
         Write-Verbose 'Finished retrieving accessToken'
-    }
-    catch {
+    } catch {
         $PSCmdlet.ThrowTerminatingError($PSItem)
     }
 }
