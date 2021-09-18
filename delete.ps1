@@ -119,9 +119,9 @@ if (-not($dryRun -eq $true)) {
         $ex = $PSItem
         if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
             $errorObj = Resolve-HTTPError -Error $ex
-            $errorMessage = "Could not delete scim account for: $($p.DisplayName). Error: $($errorObj.ErrorMessage)"
+            $errorMessage = "Could not delete salesforce account for: $($p.DisplayName). Error: $($errorObj.ErrorMessage)"
         } else {
-            $errorMessage = "Could not delete scim account for: $($p.DisplayName). Error: $($ex.Exception.Message)"
+            $errorMessage = "Could not delete salesforce account for: $($p.DisplayName). Error: $($ex.Exception.Message)"
         }
         Write-Error $errorMessage
         $auditLogs.Add([PSCustomObject]@{
