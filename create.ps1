@@ -155,7 +155,7 @@ function Resolve-HTTPError {
 #endregion
 
 try {
-    Begin
+    #Begin
     Write-Verbose 'Retrieving accessToken'
     $accessToken = Get-ScimOAuthToken -ClientID $($config.ClientID) -ClientSecret $($config.ClientSecret)
 
