@@ -109,7 +109,7 @@ if (-not($dryRun -eq $true)) {
             Password          = $($config.Password)
             AuthenticationUri = $($config.AuthenticationUri)
         }
-        $accessToken = Get-ScimOAuthToken $splatTokenParams
+        $accessToken = Get-ScimOAuthToken @splatTokenParams
 
         [System.Collections.Generic.List[object]]$operations = @()
 
