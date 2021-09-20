@@ -172,7 +172,8 @@ if (-not($dryRun -eq $true)) {
 
         Write-Verbose 'Adding Authorization headers'
         $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-        $headers.Add("Authorization", "Bearer $accessToken")
+        $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
+        
         $splatParams = @{
             Uri     = "$($config.BaseUrl)/services/scim/v2/Users/$aRef"
             Headers = $headers
