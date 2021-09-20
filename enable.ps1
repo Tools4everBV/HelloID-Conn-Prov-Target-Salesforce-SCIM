@@ -119,8 +119,11 @@ if (-not($dryRun -eq $true)) {
         $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
         $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
         
+        Write-Verbose 'Getting sessionID url'
+        $sessionUri = $($accessToken.id)
+        
         $splatParams = @{
-            Uri     = "$($config.BaseUrl)/services/scim/v2/Users/$aRef"
+            Uri     = "$sessionUri/services/scim/v2/Users/$aRef"
             Headers = $headers
             Body    = $body
             Method  = 'Patch'
