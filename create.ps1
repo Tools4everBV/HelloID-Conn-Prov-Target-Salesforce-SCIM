@@ -42,7 +42,11 @@ function Get-ScimOAuthToken {
         
         [Parameter(Mandatory)]
         [string]
-        $Password
+        $Password,
+
+        [Parameter(Mandatory)]
+        [string]
+        $AuthenticationUri
     )
 
     try {
@@ -51,16 +55,14 @@ function Get-ScimOAuthToken {
             "content-type" = "application/x-www-form-urlencoded"
         }
 
-        $body = @{
-            grant_type    = "password&client_id=$ClientID&client_secret=$ClientSecret"
-            username      = $UserName
-            password      = $Password
+        $splatParams = @{
+            Uri     = "$($AuthenticationUri)?grant_type=password&client_id=$($ClientID)&client_secret=$($ClientSecret)&username=$($UserName)&password=$($Password)"
+            Method  = 'POST'
+            Headers = $Headers
         }
-
-        Invoke-RestMethod -Uri 'https://login.salesforce.com/services/oauth2/token' -Method 'POST' -Body $body -Headers $headers
+        Invoke-RestMethod @splatParams
         Write-Verbose 'Finished retrieving accessToken'
-    }
-    catch {
+    } catch {
         $PSCmdlet.ThrowTerminatingError($PSItem)
     }
 }
