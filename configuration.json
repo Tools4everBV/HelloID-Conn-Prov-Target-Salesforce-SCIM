@@ -51,5 +51,16 @@
       "placeholder": "https://mycompany.my.salesforce.com",
       "required": true
     }
+  },
+    {
+    "key": "AuthenticationUri",
+    "type": "input",
+    "defaultValue": "",
+    "templateOptions": {
+      "label": "AuthenticationUri",
+      "description": "The URI to retrieve the oAuth token. Like [https://test.salesforce.com/services/oauth2/token]",
+      "placeholder": "https://test.salesforce.com/services/oauth2/token",
+      "required": true
+    }
   }
 ]
