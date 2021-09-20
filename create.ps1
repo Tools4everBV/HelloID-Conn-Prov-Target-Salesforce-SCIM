@@ -167,7 +167,14 @@ function Resolve-HTTPError {
 try {
     #Begin
     Write-Verbose 'Retrieving accessToken'
-    $accessToken = Get-ScimOAuthToken -ClientID $($config.ClientID) -ClientSecret $($config.ClientSecret)
+    $splatTokenParams = @{
+        ClientID          = $($config.ClientID)
+        ClientSecret      = $($config.ClientSecret)
+        UserName          = $($config.UserName)
+        Password          = $($config.Password)
+        AuthenticationUri = $($config.AuthenticationUri)
+    }
+    $accessToken = Get-ScimOAuthToken $splatTokenParams
 
     Write-Verbose 'Adding token to authorization headers'
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
