@@ -20,6 +20,27 @@
       "required": true
     }
   },
+    {
+    "key": "UserName",
+    "type": "input",
+    "defaultValue": "",
+    "templateOptions": {
+      "label": "UserName",
+      "description": "The UserName for the SalesForce SCIM API.",
+      "required": true
+    }
+  },
+    {
+    "key": "Password",
+    "type": "input",
+    "defaultValue": "",
+    "templateOptions": {
+      "type": "password",
+      "label": "Password",
+      "description": "The Password for the SalesForce SCIM API.",
+      "required": true
+    }
+  },
   {
     "key": "BaseUrl",
     "type": "input",
