@@ -78,6 +78,11 @@ function Invoke-ScimRestMethod {
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
         [string]
+        $SessionUri,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]
         $Uri,
 
         [object]
@@ -98,7 +103,7 @@ function Invoke-ScimRestMethod {
         Write-Verbose "Invoking command '$($MyInvocation.MyCommand)'"
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
-        $baseUrl = "$($config.BaseUrl)/services/scim/v2"
+        $baseUrl = "$SessionUri/services/scim/v2"
         $splatParams = @{
             Uri         = "$baseUrl/$Uri"
             Headers     = $Headers
@@ -180,12 +185,15 @@ try {
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
     $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
 
+    Write-Verbose 'Getting sessionID url'
+    $sessionUri = $($accessToken.id)
+
     Write-Verbose 'Getting total number of users'
-    $response = Invoke-ScimRestMethod -Uri 'Users' -Method 'GET' -headers $headers
+    $response = Invoke-ScimRestMethod -SessionUri $sessionUri Uri 'Users' -Method 'GET' -headers $headers
     $totalResults = $response.totalResults
 
     Write-Verbose "Retrieving '$totalResults' users"
-    $responseAllUsers = Invoke-ScimRestMethod -Uri 'Users' -Method 'GET' -headers $headers -TotalResults $totalResults
+    $responseAllUsers = Invoke-ScimRestMethod -SessionUri $sessionUri -Uri 'Users' -Method 'GET' -headers $headers -TotalResults $totalResults
 
     Write-Verbose "Verifying if account for '$($p.DisplayName)' must be created or correlated"
     $lookup = $responseAllUsers | Group-Object -Property 'ExternalId' -AsHashTable
@@ -238,7 +246,7 @@ try {
                         givenName        = $account.GivenName
                     }
                 } | ConvertTo-Json
-                $response = Invoke-ScimRestMethod -Uri 'Users' -Method 'POST' -body $body -headers $headers
+                $response = Invoke-ScimRestMethod -SessionUri $sessionUri -Uri 'Users' -Method 'POST' -body $body -headers $headers
                 $accountReference = $response.id
                 break
             }
