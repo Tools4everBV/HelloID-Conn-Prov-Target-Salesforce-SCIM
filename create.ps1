@@ -189,7 +189,7 @@ try {
     $sessionUri = $($accessToken.id)
 
     Write-Verbose 'Getting total number of users'
-    $response = Invoke-ScimRestMethod -SessionUri $sessionUri Uri 'Users' -Method 'GET' -headers $headers
+    $response = Invoke-ScimRestMethod -SessionUri $sessionUri -Uri 'Users' -Method 'GET' -headers $headers
     $totalResults = $response.totalResults
 
     Write-Verbose "Retrieving '$totalResults' users"
