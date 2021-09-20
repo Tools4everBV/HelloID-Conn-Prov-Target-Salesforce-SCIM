@@ -178,7 +178,7 @@ try {
 
     Write-Verbose 'Adding token to authorization headers'
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-    $headers.Add("Authorization", "Bearer $accessToken")
+    $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
 
     Write-Verbose 'Getting total number of users'
     $response = Invoke-ScimRestMethod -Uri 'Users' -Method 'GET' -headers $headers
