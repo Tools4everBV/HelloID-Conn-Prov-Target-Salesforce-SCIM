@@ -174,7 +174,7 @@ try {
         Password          = $($config.Password)
         AuthenticationUri = $($config.AuthenticationUri)
     }
-    $accessToken = Get-ScimOAuthToken $splatTokenParams
+    $accessToken = Get-ScimOAuthToken @splatTokenParams
 
     Write-Verbose 'Adding token to authorization headers'
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
