@@ -89,7 +89,14 @@ if (-not($dryRun -eq $true)) {
     try {
         Write-Verbose "Enabling account '$($aRef)' for '$($p.DisplayName)'"
         Write-Verbose "Retrieving accessToken"
-        $accessToken = Get-ScimOAuthToken -ClientID $($config.ClientID) -ClientSecret $($config.ClientSecret)
+        $splatTokenParams = @{
+            ClientID          = $($config.ClientID)
+            ClientSecret      = $($config.ClientSecret)
+            UserName          = $($config.UserName)
+            Password          = $($config.Password)
+            AuthenticationUri = $($config.AuthenticationUri)
+        }
+        $accessToken = Get-ScimOAuthToken $splatTokenParams
 
         [System.Collections.Generic.List[object]]$operations = @()
 
