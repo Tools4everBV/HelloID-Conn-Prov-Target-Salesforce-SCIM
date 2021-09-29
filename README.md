@@ -30,9 +30,11 @@ The following settings are required to connect to the API.
 
 | Setting     | Description |
 | ------------ | ----------- |
-| ClientID | The ClientID for the SCIM API |
-| ClientSecret | The ClientSecret for the SCIM API |
-| BaseUrl | The Uri to the SCIM API. <http://<your-application> |
+| ClientID | The ClientID to the Salesforce SCIM API |
+| ClientSecret | The ClientSecret to the Salesforce SCIM API  |
+| UserName | The UserName to the Salesforce SCIM API  |
+| Password | The Password to the Salesforce SCIM API  |
+| BaseUrl | The BaseUrl to the Salesforce environment. [https://customer.my.salesforce.com] 
 
 ### Prerequisites
 
