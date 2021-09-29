@@ -1,7 +1,7 @@
 #####################################################
 # HelloID-Conn-Prov-Target-Salesforce-Delete
 #
-# Version: 1.0.0.2
+# Version: 1.0.0.3
 #####################################################
 $VerbosePreference = 'Continue'
 
