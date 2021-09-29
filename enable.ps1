@@ -1,7 +1,7 @@
 #####################################################
 # HelloID-Conn-Prov-Target-Salesforce-Enable
 #
-# Version: 1.0.0.1
+# Version: 1.0.0.2
 #####################################################
 $VerbosePreference = 'Continue'
 
