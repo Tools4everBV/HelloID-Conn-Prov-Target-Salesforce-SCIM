@@ -1,7 +1,7 @@
 #####################################################
 # HelloID-Conn-Prov-Target-Salesforce-Create
 #
-# Version: 1.0.0.4
+# Version: 1.0.0.5
 #####################################################
 $VerbosePreference = "Continue"
 
@@ -78,12 +78,12 @@ function Invoke-ScimRestMethod {
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
         [string]
-        $SessionUri,
+        $InstanceUri,
 
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
         [string]
-        $Uri,
+        $Endpoint,
 
         [object]
         $Body,
@@ -103,9 +103,9 @@ function Invoke-ScimRestMethod {
         Write-Verbose "Invoking command '$($MyInvocation.MyCommand)'"
         [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
-        $baseUrl = "$SessionUri/services/scim/v2"
+        $baseUrl = "$InstanceUri/services/scim/v2"
         $splatParams = @{
-            Uri         = "$baseUrl/$Uri"
+            Uri         = "$baseUrl/$Endpoint"
             Headers     = $Headers
             Method      = $Method
             ContentType = $ContentType
@@ -124,7 +124,7 @@ function Invoke-ScimRestMethod {
             Write-Verbose 'Using pagination to retrieve results'
             do {
                 $startIndex = $dataList.Count
-                $splatParams['Uri'] = "$($baseUrl)/$($Uri)?startIndex=$startIndex&count=$count"
+                $splatParams['Uri'] = "$($baseUrl)/$Endpoint?startIndex=$startIndex&count=$count"
                 $result = Invoke-RestMethod @splatParams
                 foreach ($resource in $result.Resources){
                     $dataList.Add($resource)
@@ -185,11 +185,11 @@ try {
     $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
     $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
 
-    Write-Verbose 'Getting sessionID url'
-    $sessionUri = $($accessToken.id)
+    Write-Verbose 'Getting instance url'
+    $instanceUri = $($accessToken.instance_url)
 
     Write-Verbose 'Getting total number of users'
-    $response = Invoke-ScimRestMethod -SessionUri $sessionUri -Uri 'Users' -Method 'GET' -headers $headers
+    $response = Invoke-ScimRestMethod -InstanceUri $instanceUri -Endpoint 'Users' -Method 'GET' -headers $headers
     $totalResults = $response.totalResults
 
     Write-Verbose "Retrieving '$totalResults' users"
