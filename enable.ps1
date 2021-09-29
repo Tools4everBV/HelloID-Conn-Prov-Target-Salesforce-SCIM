@@ -97,6 +97,9 @@ if (-not($dryRun -eq $true)) {
             AuthenticationUri = $($config.AuthenticationUri)
         }
         $accessToken = Get-ScimOAuthToken @splatTokenParams
+        
+        Write-Verbose 'Getting instance url'
+        $instanceUri = $($accessToken.instance_url)
 
         [System.Collections.Generic.List[object]]$operations = @()
 
@@ -118,12 +121,9 @@ if (-not($dryRun -eq $true)) {
         Write-Verbose 'Adding Authorization headers'
         $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
         $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
-        
-        Write-Verbose 'Getting sessionID url'
-        $sessionUri = $($accessToken.id)
-        
+                
         $splatParams = @{
-            Uri     = "$sessionUri/services/scim/v2/Users/$aRef"
+            Uri     = "$instanceUri/services/scim/v2/Users/$aRef"
             Headers = $headers
             Body    = $body
             Method  = 'Patch'
