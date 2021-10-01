@@ -13,15 +13,18 @@ $auditLogs = New-Object Collections.Generic.List[PSCustomObject]
 
 $account = [PSCustomObject]@{
     ExternalId          = $p.ExternalId
-    UserName            = $p.UserName
-    GivenName           = $p.Name.GivenName
+    UserName            = $p.Accounts.MicrosoftAzureAD.userPrincipalName
+    GivenName           = $p.Name.nickName
     FamilyName          = $p.Name.FamilyName
-    FamilyNameFormatted = $p.DisplayName
-    FamilyNamePrefix    = ''
+    FamilyNameFormatted = $p.custom.DisplayName
+    FamilyNamePrefix    = $p.Name.familyNamePrefix
+    Alias               = ''
     IsUserActive        = $true
     EmailAddress        = $p.Contact.Business.Email
     EmailAddressType    = 'Work'
     IsEmailPrimary      = $true
+    Entitlement         = '' #insert default entitlement profile
+    UserType            = 'Standard'
 }
 
 #region functions
@@ -35,11 +38,11 @@ function Get-ScimOAuthToken {
         [Parameter(Mandatory)]
         [string]
         $ClientSecret,
-
+        
         [Parameter(Mandatory)]
         [string]
         $UserName,
-
+        
         [Parameter(Mandatory)]
         [string]
         $Password,
@@ -114,7 +117,6 @@ function Invoke-ScimRestMethod {
             Write-Verbose 'Adding body to request'
             $splatParams['Body'] = $Body
         }
-
 
         if ($TotalResults){
             # Fixed value since each page contains 20 items max
@@ -198,8 +200,8 @@ try {
     $responseAllUsers = Invoke-ScimRestMethod -InstanceUri $instanceUri -Endpoint 'Users' -Method 'GET' -headers $headers -TotalResults $totalResults
 
     Write-Verbose "Verifying if account for '$($p.DisplayName)' must be created or correlated"
-    $lookup = $responseAllUsers | Group-Object -Property 'ExternalId' -AsHashTable
-    $userObject = $lookup[$account.ExternalId]
+    $lookup = $responseAllUsers | Group-Object -Property 'userName' -AsHashTable
+    $userObject = $lookup[$account.UserName]
     if ($userObject){
         Write-Verbose "Account for '$($p.DisplayName)' found with id '$($userObject.id)', switching to 'correlate'"
         $action = 'Correlate'
@@ -229,26 +231,35 @@ try {
                     }
                 )
 
+                [System.Collections.Generic.List[object]]$entitlementList = @()
+                $entitlementList.Add(
+                    [PSCustomObject]@{
+                        value   = $account.Entitlement
+                    }
+                )
+
                 $body = [ordered]@{
                     schemas    = @(
                         "urn:ietf:params:scim:schemas:core:2.0:User",
                         "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
                     )
-                    externalId = $account.ExternalID
-                    userName   = $account.UserName
-                    active     = $account.IsUserActive
-                    emails     = $emailList
-                    meta       = @{
+                    EmployeeNumber  = $account.ExternalID
+                    userName        = $account.UserName
+                    Alias           = $account.Alias
+                    emails          = $emailList
+                    entitlements    = $entitlementList
+                    userType        = $account.UserType
+                    meta            = @{
                         resourceType = "User"
                     }
                     name = [ordered]@{
-                        formatted        = $account.NameFormatted
+                        formatted        = $account.FamilyNameFormatted
                         familyName       = $account.FamilyName
                         familyNamePrefix = $account.FamilyNamePrefix
                         givenName        = $account.GivenName
                     }
                 } | ConvertTo-Json
-                $response = Invoke-ScimRestMethod -SessionUri $sessionUri -Uri 'Users' -Method 'POST' -body $body -headers $headers
+                $response = Invoke-ScimRestMethod -InstanceUri $instanceUri -Endpoint 'Users' -Method 'POST' -body $body -headers $headers
                 $accountReference = $response.id
                 break
             }
