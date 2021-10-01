@@ -1,7 +1,7 @@
 #####################################################
 # HelloID-Conn-Prov-Target-Salesforce-Create
 #
-# Version: 1.0.0.5
+# Version: 1.0.0.6
 #####################################################
 $VerbosePreference = "Continue"
 
@@ -35,11 +35,11 @@ function Get-ScimOAuthToken {
         [Parameter(Mandatory)]
         [string]
         $ClientSecret,
-        
+
         [Parameter(Mandatory)]
         [string]
         $UserName,
-        
+
         [Parameter(Mandatory)]
         [string]
         $Password,
@@ -105,7 +105,6 @@ function Invoke-ScimRestMethod {
 
         $baseUrl = "$InstanceUri/services/scim/v2"
         $splatParams = @{
-            Uri         = "$baseUrl/$Endpoint"
             Headers     = $Headers
             Method      = $Method
             ContentType = $ContentType
@@ -119,19 +118,21 @@ function Invoke-ScimRestMethod {
         if ($TotalResults){
             # Fixed value since each page contains 20 items max
             $count = 20
-
+            $startIndex = 1
             [System.Collections.Generic.List[object]]$dataList = @()
             Write-Verbose 'Using pagination to retrieve results'
             do {
-                $startIndex = $dataList.Count
-                $splatParams['Uri'] = "$($baseUrl)/$Endpoint?startIndex=$startIndex&count=$count"
+                $splatParams['Uri'] = "$($baseUrl)/$($Endpoint)?startIndex=$startIndex&count=$count"
                 $result = Invoke-RestMethod @splatParams
+                $startIndex + $count + $count
                 foreach ($resource in $result.Resources){
                     $dataList.Add($resource)
                 }
+                $startIndex = $count+$startIndex
             } until ($dataList.Count -eq $TotalResults)
             Write-Output $dataList
         } else {
+            $splatParams['Uri'] =  "$baseUrl/$Endpoint"
             Invoke-RestMethod @splatParams
         }
     } catch {
@@ -186,14 +187,14 @@ try {
     $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
 
     Write-Verbose 'Getting instance url'
-    $instanceUri = $($accessToken.instance_url)
+    $instanceUri = $($config.baseUrl)
 
     Write-Verbose 'Getting total number of users'
     $response = Invoke-ScimRestMethod -InstanceUri $instanceUri -Endpoint 'Users' -Method 'GET' -headers $headers
     $totalResults = $response.totalResults
 
     Write-Verbose "Retrieving '$totalResults' users"
-    $responseAllUsers = Invoke-ScimRestMethod -SessionUri $sessionUri -Uri 'Users' -Method 'GET' -headers $headers -TotalResults $totalResults
+    $responseAllUsers = Invoke-ScimRestMethod -InstanceUri $instanceUri -Endpoint 'Users' -Method 'GET' -headers $headers -TotalResults $totalResults
 
     Write-Verbose "Verifying if account for '$($p.DisplayName)' must be created or correlated"
     $lookup = $responseAllUsers | Group-Object -Property 'ExternalId' -AsHashTable
