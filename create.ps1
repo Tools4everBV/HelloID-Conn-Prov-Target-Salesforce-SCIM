@@ -1,7 +1,7 @@
 #####################################################
 # HelloID-Conn-Prov-Target-Salesforce-Create
 #
-# Version: 1.0.0.6
+# Version: 1.0.0.5
 #####################################################
 $VerbosePreference = "Continue"
 
@@ -115,6 +115,7 @@ function Invoke-ScimRestMethod {
             $splatParams['Body'] = $Body
         }
 
+
         if ($TotalResults){
             # Fixed value since each page contains 20 items max
             $count = 20
@@ -124,7 +125,7 @@ function Invoke-ScimRestMethod {
             do {
                 $splatParams['Uri'] = "$($baseUrl)/$($Endpoint)?startIndex=$startIndex&count=$count"
                 $result = Invoke-RestMethod @splatParams
-                $startIndex + $count + $count
+                $null = $startIndex + $count + $count
                 foreach ($resource in $result.Resources){
                     $dataList.Add($resource)
                 }
