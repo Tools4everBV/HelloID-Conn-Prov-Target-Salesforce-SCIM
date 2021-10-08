@@ -168,7 +168,7 @@ function Resolve-HTTPError {
 }
 #endregion
 
-if (-not($dryRun -eq $false)) {
+if (-not($dryRun -eq $true)) {
     try {
         Write-Verbose "Updating account '$($aRef)' for '$($p.DisplayName)'"
         Write-Verbose 'Retrieving accessToken'
