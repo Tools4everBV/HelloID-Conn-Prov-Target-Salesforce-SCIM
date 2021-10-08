@@ -1,7 +1,7 @@
 #####################################################
-# HelloID-Conn-Prov-Target-Salesforce-Delete
+# HelloID-Conn-Prov-Target-Salesforce-Disable
 #
-# Version: 1.0.0.3
+# Version: 1.0.0.2
 #####################################################
 $VerbosePreference = 'Continue'
 
@@ -12,7 +12,7 @@ $aRef = $AccountReference | ConvertFrom-Json
 $success = $false
 $auditLogs = New-Object Collections.Generic.List[PSCustomObject]
 
-#region Helper Functions
+#region functions
 function Get-ScimOAuthToken {
     [CmdletBinding()]
     param (
@@ -87,7 +87,7 @@ function Resolve-HTTPError {
 
 if (-not($dryRun -eq $true)) {
     try {
-        Write-Verbose "Deleting account '$($aRef)' for '$($p.DisplayName)'"
+        Write-Verbose "Disabling account '$($aRef)' for '$($p.DisplayName)'"
         Write-Verbose "Retrieving accessToken"
         $splatTokenParams = @{
             ClientID          = $($config.ClientID)
@@ -97,17 +97,20 @@ if (-not($dryRun -eq $true)) {
             AuthenticationUri = $($config.AuthenticationUri)
         }
         $accessToken = Get-ScimOAuthToken @splatTokenParams
-        
+        Write-Verbose 'Adding token to authorization headers'
+        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
         Write-Verbose 'Getting instance url'
-        $instanceUri = $($accessToken.instance_url)
+        $instanceUri = $($config.baseUrl)
 
         [System.Collections.Generic.List[object]]$operations = @()
 
         $operations.Add(
             [PSCustomObject]@{
                 op = "Replace"
-                path = "active"
-                value = $false
+                value = @{
+                    active = $false
+                }
             }
         )
 
@@ -116,12 +119,12 @@ if (-not($dryRun -eq $true)) {
                 "urn:ietf:params:scim:api:messages:2.0:PatchOp"
             )
             Operations = $operations
-        } | ConvertTo-Json
+        } | ConvertTo-Json -Depth 10
 
         Write-Verbose 'Adding Authorization headers'
         $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
         $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
-
+        
         $splatParams = @{
             Uri     = "$instanceUri/services/scim/v2/Users/$aRef"
             Headers = $headers
@@ -132,7 +135,7 @@ if (-not($dryRun -eq $true)) {
         if ($results.id){
             $success = $true
             $auditLogs.Add([PSCustomObject]@{
-                Message = "Delete account for: $($p.DisplayName) was successful."
+                Message = "Disable account for: $($p.DisplayName) was successful."
                 IsError = $False
             })
         }
@@ -141,9 +144,9 @@ if (-not($dryRun -eq $true)) {
         $ex = $PSItem
         if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
             $errorObj = Resolve-HTTPError -Error $ex
-            $errorMessage = "Could not delete salesforce account for: $($p.DisplayName). Error: $($errorObj.ErrorMessage)"
+            $errorMessage = "Could not disable salesforce account for: $($p.DisplayName). Error: $($errorObj.ErrorMessage)"
         } else {
-            $errorMessage = "Could not delete salesforce account for: $($p.DisplayName). Error: $($ex.Exception.Message)"
+            $errorMessage = "Could not disable salesforce account for: $($p.DisplayName). Error: $($ex.Exception.Message)"
         }
         Write-Error $errorMessage
         $auditLogs.Add([PSCustomObject]@{
