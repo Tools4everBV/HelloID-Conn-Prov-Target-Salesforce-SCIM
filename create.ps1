@@ -13,17 +13,20 @@ $auditLogs = New-Object Collections.Generic.List[PSCustomObject]
 
 $account = [PSCustomObject]@{
     ExternalId          = $p.ExternalId
-    UserName            = $p.Accounts.MicrosoftAzureAD.userPrincipalName
+    UserName            = $p.UserName
     GivenName           = $p.Name.nickName
     FamilyName          = $p.Name.FamilyName
-    FamilyNameFormatted = $p.custom.DisplayName
-    FamilyNamePrefix    = $p.Name.familyNamePrefix
-    Alias               = ''
+    FamilyNameFormatted = $p.Name.nickName + " " + $p.Name.FamilyName
+    FamilyNamePrefix    = ''
+    department          = $p.PrimaryContract.Department.DisplayName
+    mobilePhone         = $p.Contact.Business.Phone.Mobile
+    mobilePhoneType    = 'Work'        
     IsUserActive        = $true
     EmailAddress        = $p.Contact.Business.Email
     EmailAddressType    = 'Work'
+    emailEncodingKey    = 'ISO-8859-1'
     IsEmailPrimary      = $true
-    Entitlement         = '' #insert default entitlement profile
+    Entitlement         = '<Entitlement Profile ID needed here>'
     UserType            = 'Standard'
 }
 
@@ -238,18 +241,28 @@ try {
                     }
                 )
 
+                [System.Collections.Generic.List[object]]$phoneList = @()
+                $phoneList.Add(
+                    [PSCustomObject]@{
+                        type    = $account.mobilePhoneType
+                        value   = $account.mobilePhone
+                    }
+                )
+
                 $body = [ordered]@{
                     schemas    = @(
                         "urn:ietf:params:scim:schemas:core:2.0:User",
                         "urn:ietf:params:scim:schemas:extension:enterprise:2.0:User"
                     )
-                    EmployeeNumber  = $account.ExternalID
-                    userName        = $account.UserName
-                    Alias           = $account.Alias
-                    emails          = $emailList
-                    entitlements    = $entitlementList
-                    userType        = $account.UserType
-                    meta            = @{
+                    EmployeeNumber      = $account.ExternalID
+                    userName            = $account.UserName
+                    emails              = $emailList
+                    emailEncodingKey    = $account.emailEncodingKey
+                    department          = $account.department
+                    entitlements        = $entitlementList
+                    userType            = $account.UserType
+                    phoneNumbers        = $phoneList
+                    meta                = @{
                         resourceType = "User"
                     }
                     name = [ordered]@{

@@ -14,18 +14,15 @@ $success = $false
 $auditLogs = New-Object Collections.Generic.List[PSCustomObject]
 
 $account = [PSCustomObject]@{
-    ExternalId          = $pd.ExternalId.New
-    UserName            = $pd.UserName.New
     GivenName           = $pd.Name.GivenName.New
     FamilyName          = $pd.Name.FamilyName.New
     FamilyNameFormatted = $pd.DisplayName.New
     FamilyNamePrefix    = $pd.DisplayName.FamilyNamePrefix.New
     IsUserActive        = $true
-    EmailAddress        = $pd.Contact.Business.Email.New
-    IsEmailPrimary      = $true
+    Department          = $pd.PrimaryContract.Department.DisplayName.New
 }
 
-#region Helper Functions
+#region functions
 function Get-ScimOAuthToken {
     [CmdletBinding()]
     param (
@@ -68,6 +65,79 @@ function Get-ScimOAuthToken {
     }
 }
 
+function Invoke-ScimRestMethod {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [Microsoft.PowerShell.Commands.WebRequestMethod]
+        $Method,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $InstanceUri,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $Endpoint,
+
+        [object]
+        $Body,
+
+        [string]
+        $ContentType = 'application/json',
+
+        [Parameter(Mandatory)]
+        [System.Collections.IDictionary]
+        $Headers,
+
+        [string]
+        $TotalResults
+    )
+
+    try {
+        Write-Verbose "Invoking command '$($MyInvocation.MyCommand)'"
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
+        $baseUrl = "$InstanceUri/services/scim/v2"
+        $splatParams = @{
+            Headers     = $Headers
+            Method      = $Method
+            ContentType = $ContentType
+        }
+
+        if ($Body){
+            Write-Verbose 'Adding body to request'
+            $splatParams['Body'] = $Body
+        }
+
+        if ($TotalResults){
+            # Fixed value since each page contains 20 items max
+            $count = 20
+            $startIndex = 1
+            [System.Collections.Generic.List[object]]$dataList = @()
+            Write-Verbose 'Using pagination to retrieve results'
+            do {
+                $splatParams['Uri'] = "$($baseUrl)/$($Endpoint)?startIndex=$startIndex&count=$count"
+                $result = Invoke-RestMethod @splatParams
+                $null = $startIndex + $count + $count
+                foreach ($resource in $result.Resources){
+                    $dataList.Add($resource)
+                }
+                $startIndex = $count+$startIndex
+            } until ($dataList.Count -eq $TotalResults)
+            Write-Output $dataList
+        } else {
+            $splatParams['Uri'] =  "$baseUrl/$Endpoint"
+            Invoke-RestMethod @splatParams
+        }
+    } catch {
+        $PSCmdlet.ThrowTerminatingError($_)
+    }
+}
+
 function Resolve-HTTPError {
     [CmdletBinding()]
     param (
@@ -98,7 +168,7 @@ function Resolve-HTTPError {
 }
 #endregion
 
-if (-not($dryRun -eq $true)) {
+if (-not($dryRun -eq $false)) {
     try {
         Write-Verbose "Updating account '$($aRef)' for '$($p.DisplayName)'"
         Write-Verbose 'Retrieving accessToken'
@@ -110,58 +180,37 @@ if (-not($dryRun -eq $true)) {
             AuthenticationUri = $($config.AuthenticationUri)
         }
         $accessToken = Get-ScimOAuthToken @splatTokenParams
-        
+        Write-Verbose 'Adding token to authorization headers'
+        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
         Write-Verbose 'Getting instance url'
-        $instanceUri = $($accessToken.instance_url)
+        $instanceUri = $($config.baseUrl)
 
         [System.Collections.Generic.List[object]]$operations = @()
-
-        if ($account.ExternalId){
-            $operations.Add(
-                [PSCustomObject]@{
-                    op = "Replace"
-                    path = "externalId"
-                    value = $account.ExternalId
-                }
-            )
-        }
-
-        if ($account.UserName){
-            $operations.Add(
-                [PSCustomObject]@{
-                    op = "Replace"
-                    path = "userName"
-                    value = $account.UserName
-                }
-            )
-        }
-
-        if ($account.GivenName){
-            $operations.Add(
-                [PSCustomObject]@{
-                    op = "Replace"
-                    path = "name.givenName"
-                    value = $account.GivenName
-                }
-            )
-        }
 
         if ($account.FamilyName){
             $operations.Add(
                 [PSCustomObject]@{
                     op = "Replace"
-                    path = "name.familyName"
-                    value = $account.FamilyName
-                }
-            )
-        }
+                    value = @{
+                        name = @{
+                            formatted        = $account.FamilyNameFormatted
+                            familyName       = $account.FamilyName
+                            familyNamePrefix = $account.FamilyNamePrefix
+                            givenName        = $account.GivenName
+                        }
+                  }
+         }
+              ) 
+       }
 
-        if ($account.EmailAddress){
+        if ($account.Department){
             $operations.Add(
                 [PSCustomObject]@{
                     op = "Replace"
-                    path = 'emails[type eq "work"].value'
-                    value = $account.EmailAddress
+                    value = @{
+                        department = $account.Department
+                    }
                 }
             )
         }
@@ -171,11 +220,7 @@ if (-not($dryRun -eq $true)) {
                 "urn:ietf:params:scim:api:messages:2.0:PatchOp"
             )
             Operations = $operations
-        } | ConvertTo-Json
-
-        Write-Verbose 'Adding Authorization headers'
-        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-        $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
+        } | ConvertTo-Json -Depth 10
         
         $splatParams = @{
             Uri     = "$instanceUri/services/scim/v2/Users/$aRef"
@@ -183,6 +228,10 @@ if (-not($dryRun -eq $true)) {
             Body    = $body
             Method  = 'Patch'
         }
+
+        write-verbose $operations.count
+
+        If($operations.count -gt 0){
         $results = Invoke-RestMethod @splatParams
         if ($results.id){
             $success = $true
@@ -191,6 +240,7 @@ if (-not($dryRun -eq $true)) {
                 IsError = $False
             })
         }
+        } $success = $true
     } catch {
         $success = $false
         $ex = $PSItem
