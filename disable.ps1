@@ -12,7 +12,7 @@ $aRef = $AccountReference | ConvertFrom-Json
 $success = $false
 $auditLogs = New-Object Collections.Generic.List[PSCustomObject]
 
-#region Helper Functions
+#region functions
 function Get-ScimOAuthToken {
     [CmdletBinding()]
     param (
@@ -97,17 +97,20 @@ if (-not($dryRun -eq $true)) {
             AuthenticationUri = $($config.AuthenticationUri)
         }
         $accessToken = Get-ScimOAuthToken @splatTokenParams
-        
+        Write-Verbose 'Adding token to authorization headers'
+        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
         Write-Verbose 'Getting instance url'
-        $instanceUri = $($accessToken.instance_url)
+        $instanceUri = $($config.baseUrl)
 
         [System.Collections.Generic.List[object]]$operations = @()
 
         $operations.Add(
             [PSCustomObject]@{
                 op = "Replace"
-                path = "active"
-                value = $false
+                value = @{
+                    active = $false
+                }
             }
         )
 
@@ -116,7 +119,7 @@ if (-not($dryRun -eq $true)) {
                 "urn:ietf:params:scim:api:messages:2.0:PatchOp"
             )
             Operations = $operations
-        } | ConvertTo-Json
+        } | ConvertTo-Json -Depth 10
 
         Write-Verbose 'Adding Authorization headers'
         $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
