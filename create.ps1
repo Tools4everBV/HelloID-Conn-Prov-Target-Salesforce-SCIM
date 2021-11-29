@@ -1,7 +1,7 @@
 #####################################################
 # HelloID-Conn-Prov-Target-Salesforce-Create
 #
-# Version: 1.0.0.5
+# Version: 1.0.0.6
 #####################################################
 $VerbosePreference = "Continue"
 
@@ -78,7 +78,7 @@ function Invoke-ScimRestMethod {
     param (
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
-        [Microsoft.PowerShell.Commands.WebRequestMethod]
+        [string]
         $Method,
 
         [Parameter(Mandatory)]

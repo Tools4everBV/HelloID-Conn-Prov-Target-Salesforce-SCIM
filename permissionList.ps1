@@ -1,7 +1,7 @@
 #####################################################
 # HelloID-Conn-Prov-Target-Salesforce-Permissions
 #
-# Version: 1.0.0.5
+# Version: 1.0.0.6
 #####################################################
 $VerbosePreference = "Continue"
 $config = $configuration | ConvertFrom-Json
@@ -54,7 +54,7 @@ function Invoke-ScimRestMethod {
     param (
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
-        [Microsoft.PowerShell.Commands.WebRequestMethod]
+        [string]
         $Method,
 
         [Parameter(Mandatory)]
