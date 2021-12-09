@@ -1,10 +1,14 @@
-#####################################################
-# HelloID-Conn-Prov-Target-Salesforce-Permissions
-#
-# Version: 1.0.0.6
-#####################################################
-$VerbosePreference = "Continue"
-$config = $configuration | ConvertFrom-Json
+$config = $configuration | ConvertFrom-Json;
+$success = $False;
+$auditLogs = New-Object Collections.Generic.List[PSCustomObject];
+
+$p = $person | ConvertFrom-Json;
+$m = $manager | ConvertFrom-Json;
+$aRef = $accountReference | ConvertFrom-Json;
+$mRef = $managerAccountReference | ConvertFrom-Json;
+
+# The permissionReference object contains the Identification object provided in the retrieve permissions call
+$pRef = $permissionReference | ConvertFrom-Json;
 
 #region functions
 function Get-ScimOAuthToken {
@@ -54,7 +58,7 @@ function Invoke-ScimRestMethod {
     param (
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
-        [string]
+        [Microsoft.PowerShell.Commands.WebRequestMethod]
         $Method,
 
         [Parameter(Mandatory)]
@@ -152,80 +156,100 @@ function Resolve-HTTPError {
 }
 #endregion
 
-try {
-    #Begin
-    Write-Verbose 'Retrieving accessToken'
-    $splatTokenParams = @{
-        ClientID          = $($config.ClientID)
-        ClientSecret      = $($config.ClientSecret)
-        UserName          = $($config.UserName)
-        Password          = $($config.Password)
-        AuthenticationUri = $($config.AuthenticationUri)
-    }
-    $accessToken = Get-ScimOAuthToken @splatTokenParams
+if(-Not($dryRun -eq $True))
+{
+    try {
+        Write-Verbose "Setting permission account '$($aRef)' for '$($p.DisplayName)'"
+        Write-Verbose "Retrieving accessToken"
+        $splatTokenParams = @{
+            ClientID          = $($config.ClientID)
+            ClientSecret      = $($config.ClientSecret)
+            UserName          = $($config.UserName)
+            Password          = $($config.Password)
+            AuthenticationUri = $($config.AuthenticationUri)
+        }
+        $accessToken = Get-ScimOAuthToken @splatTokenParams
+        Write-Verbose 'Adding token to authorization headers'
+        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
+        Write-Verbose 'Getting instance url'
+        $instanceUri = $($config.baseUrl)
 
-    Write-Verbose 'Adding token to authorization headers'
-    $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-    $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
+        [System.Collections.Generic.List[object]]$operations = @()
 
-    Write-Verbose 'Getting instance url'
-    $instanceUri = $($config.baseUrl)
+        [System.Collections.Generic.List[object]]$entitlementList = @()
+        $entitlementList.Add(
+        [PSCustomObject]@{
+        value   = $pRef.Reference
+        }
+        )
 
-    Write-Verbose 'Getting total number of Entitlements'
-    $response = Invoke-ScimRestMethod -InstanceUri $instanceUri -Endpoint 'Entitlements' -Method 'GET' -headers $headers
-    $totalResults = $response.totalResults
-
-    Write-Verbose "Retrieving '$totalResults' entitlements"
-    $responseAllEntitlements = Invoke-ScimRestMethod -InstanceUri $instanceUri -Endpoint 'Entitlements' -Method 'GET' -headers $headers -TotalResults $totalResults
-
-    Write-Verbose 'Getting total number of Roles'
-    $response = Invoke-ScimRestMethod -InstanceUri $instanceUri -Endpoint 'Roles' -Method 'GET' -headers $headers
-    $totalResults = $response.totalResults
-
-    Write-Verbose "Retrieving '$totalResults' roles"
-    $responseAllRoles = Invoke-ScimRestMethod -InstanceUri $instanceUri -Endpoint 'Roles' -Method 'GET' -headers $headers -TotalResults $totalResults
-
-    $permissions = New-Object System.Collections.Generic.List[System.Object]
-
-    foreach ($entitlement in $responseAllEntitlements) {
-        $permission = [PSCustomObject]@{
-            DisplayName    = $entitlement.displayName
-            Identification = @{
-                Reference = $entitlement.id;
+        $operations.Add(
+            [PSCustomObject]@{
+                op = "Replace"
+                value = [PSCustomObject]@{
+                    entitlements = $entitlementList
+                }
             }
-        } 
-        $permissions.Add($permission)
-    }
+        )
 
-    foreach ($role in $responseAllRoles) {
-        $permission = [PSCustomObject]@{
-            DisplayName    = "Rol: " + $role.displayName
-            Identification = @{
-                Reference = $role.id;
-            }
-        } 
-        $permissions.Add($permission)
-    }
+        $body = [ordered]@{
+            schemas = @(
+                "urn:ietf:params:scim:api:messages:2.0:PatchOp"
+            )
+            Operations = $operations
+        } | ConvertTo-Json -Depth 10
 
-    $success = $true   
-}
-catch {
-    $success = $false
-    $ex = $PSItem
-    if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
-        $errorObj = Resolve-HTTPError -Error $ex
-        $errorMessage = "Could not receive Salesforce entitlements, roles. Error: $($errorObj.ErrorMessage)"
-    }
-    else {
-        $errorMessage = "Could not receive Salesforce entitlements, roles. Error: $($ex.Exception.Message)"
-    }
-    Write-Error $errorMessage
-    $auditLogs.Add([PSCustomObject]@{
+        Write-Verbose $body
+
+        Write-Verbose 'Adding Authorization headers'
+        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+        $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
+        
+        $splatParams = @{
+            Uri     = "$instanceUri/services/scim/v2/Users/$aRef"
+            Headers = $headers
+            Body    = $body
+            Method  = 'Patch'
+        }
+        $results = Invoke-RestMethod @splatParams
+        if ($results.id){
+            $success = $true
+            $auditLogs.Add([PSCustomObject]@{
+                Message = "Setting permission for: $($p.DisplayName) was successful."
+                IsError = $False
+            })
+        }
+    } catch {
+        $success = $false
+        $ex = $PSItem
+        if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
+            $errorObj = Resolve-HTTPError -Error $ex
+            $errorMessage = "Could not set permission account for: $($p.DisplayName). Error: $($errorObj.ErrorMessage)"
+        } else {
+            $errorMessage = "Could not set permission account for: $($p.DisplayName). Error: $($ex.Exception.Message)"
+        }
+        Write-Error $errorMessage
+        $auditLogs.Add([PSCustomObject]@{
             Message = $errorMessage
             IsError = $true
         })
-    # End
+    }
 }
-Finally {
-    Write-Output $permissions | ConvertTo-Json -Depth 10;
-}
+
+$success = $True;
+$auditLogs.Add([PSCustomObject]@{
+    Action = "GrantPermission";
+    Message = "Permission $($pRef.Reference) added to account $($aRef)";
+    IsError = $False;
+});
+
+# Send results
+$result = [PSCustomObject]@{
+    Success= $success;
+    AuditLogs = $auditLogs;
+    Account = [PSCustomObject]@{};
+    # SubPermissions = $SubPermissions
+};
+
+Write-Output $result | ConvertTo-Json -Depth 10;
