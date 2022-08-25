@@ -195,7 +195,7 @@ try {
     Write-Verbose 'Getting instance url'
     $instanceUri = $($config.baseUrl)
 
-    Write-Verbose "Checking if user [$($p.DisplayName)] exists"
+    Write-Verbose "Checking if user [$($account.UserName)] exists"
     $response = Invoke-ScimRestMethod -InstanceUri $instanceUri -Endpoint "Users?filter=userName eq ""$($account.username)""" -Method 'GET' -headers $headers
     $userObject = $response.Resources    
     if ($null -ne $userObject.id){
