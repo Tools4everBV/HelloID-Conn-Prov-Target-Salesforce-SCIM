@@ -195,17 +195,10 @@ try {
     Write-Verbose 'Getting instance url'
     $instanceUri = $($config.baseUrl)
 
-    Write-Verbose 'Getting total number of users'
-    $response = Invoke-ScimRestMethod -InstanceUri $instanceUri -Endpoint 'Users' -Method 'GET' -headers $headers
-    $totalResults = $response.totalResults
-
-    Write-Verbose "Retrieving '$totalResults' users"
-    $responseAllUsers = Invoke-ScimRestMethod -InstanceUri $instanceUri -Endpoint 'Users' -Method 'GET' -headers $headers -TotalResults $totalResults
-
-    Write-Verbose "Verifying if account for '$($p.DisplayName)' must be created or correlated"
-    $lookup = $responseAllUsers | Group-Object -Property 'userName' -AsHashTable
-    $userObject = $lookup[$account.UserName]
-    if ($userObject){
+    Write-Verbose "Checking if user [$($account.UserName)] exists"
+    $response = Invoke-ScimRestMethod -InstanceUri $instanceUri -Endpoint "Users?filter=userName eq ""$($account.username)""" -Method 'GET' -headers $headers
+    $userObject = $response.Resources    
+    if ($null -ne $userObject.id){
         Write-Verbose "Account for '$($p.DisplayName)' found with id '$($userObject.id)', switching to 'correlate'"
         $action = 'Correlate'
     } else {
