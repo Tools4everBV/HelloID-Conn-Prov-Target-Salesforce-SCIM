@@ -1,5 +1,3 @@
-# Salesforce 
-
 Met behulp van de Salesforce Target Connector koppel je Salesforce via de identity & access management (IAM)-oplossing HelloID van Tools4ever aan diverse bronsystemen. Met behulp van deze integratie til je onder meer het beheer van toegangsrechten en gebruikersaccount naar een hoger niveau, en automatiseer je deze processen. De gegevens uit je bronsystemen zijn daarbij leidend. In dit artikel ontdek je meer over deze koppeling en de mogelijkheden.
 
 # Wat is Salesforce?
