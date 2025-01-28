@@ -1,10 +1,10 @@
 Met behulp van de Salesforce Target Connector koppel je Salesforce via de identity & access management (IAM)-oplossing HelloID van Tools4ever aan diverse bronsystemen. Met behulp van deze integratie til je onder meer het beheer van toegangsrechten en gebruikersaccount naar een hoger niveau, en automatiseer je deze processen. De gegevens uit je bronsystemen zijn daarbij leidend. In dit artikel ontdek je meer over deze koppeling en de mogelijkheden.
 
-# Wat is Salesforce?
+## Wat is Salesforce?
 
 Salesforce is software voor klantenservicebeheer, ook wel customer relationship management (CRM) genoemd. De oplossing is ontwikkeld door het gelijknamige bedrijf. Het verzamelt klantgerelateerde gegevens binnen je organisatie op een centrale plek en maakt deze toegankelijk via een uniforme oplossing. Zo breek je technologiesilo’s tussen afdelingen af en krijg je een compleet beeld van klanten. 
 
-# Waarom is Salesforce koppeling handig?
+## Waarom is Salesforce koppeling handig?
 
 Voor een optimale productiviteit hebben werknemers toegang nodig tot de juiste accounts, systemen en data. Tegelijkertijd is digitale veiligheid voor ieder bedrijf een cruciaal aandachtspunt. Met het oog hierop wil je zeker stellen dat gebruikers nooit over onnodige toegangsrechten beschikken, en wil je het beheer van autorisatie en gebruikersaccounts volledig op orde hebben. Deze zekerheid krijg je dankzij de koppeling van je bronsystemen aan Salesforce via HelloID. De automatisering die deze integratie mogelijk maakt voorkomt menselijke fouten, verhoogt de efficiëntie en optimaliseert de productiviteit van werknemers. 
 
@@ -15,7 +15,7 @@ De Salesforce connector maakt een koppeling met veelvoorkomende systemen mogelij
 
 Meer details over de koppeling met deze en andere bronsystemen vind je verderop in het artikel.
 
-# Hoe HelloID integreert met Salesforce
+## Hoe HelloID integreert met Salesforce
 
 Je kunt Salesforce als doelsysteem koppelen aan HelloID en integreren met je bronsystemen. Voor het realiseren van deze koppeling zijn meerdere connectoren beschikbaar: een connector op basis van de SCIM API van Salesforce en een connector op basis van de APEX REST API van het bedrijf. In beide gevallen zetten we de connector in als doelconnector. Met beide API’s kan je gebruikersaccounts beheren. De SCIM API maakt ook het beheren van permissies mogelijk, iets dat de APEX REST API vooralsnog niet ondersteunt. 
 
@@ -28,7 +28,7 @@ De koppeling tussen je bronsystemen en Salesforce biedt diverse mogelijkheden, w
 *	Toekennen/ontnemen van Salesforce entitlements/rollen: Op basis van brondata kan HelloID een Salesforce-account ook lid maken van een entitlement en/of rol in Salesforce.
 
 
-# HelloID voor Salesforce helpt je met
+## HelloID voor Salesforce helpt je met
 
 * **Sneller accounts aanmaken:** Dankzij de koppeling tussen je bronsystemen en Salesforce via HelloID zorg je dat Salesforce-accounts voor nieuwe gebruikers sneller beschikbaar zijn. HelloID automatiseert dit proces, neemt je daarmee werk uit handen en zorgt dat de medewerker op zijn eerste werkdag direct aan de slag kan met het CRM-systeem en toegang heeft tot klantgegevens. 
 
@@ -37,7 +37,7 @@ De koppeling tussen je bronsystemen en Salesforce biedt diverse mogelijkheden, w
 * **Verbeterde serviceniveaus en beveiliging:** De koppeling tussen je bronsystemen en Salesforce tilt het beheer van accounts en autorisaties naar een hoger niveau. Dit biedt onder meer grote voordelen met het oog op de digitale veiligheid van zowel je organisatie als assets. Zo voorkom je dat accounts van voormalig werknemers onbedoeld actief blijven of je autorisaties niet tijdig intrekt. Belangrijk, want beide fouten kunnen aanvallers in de kaart spelen en tot veel schade leiden. Zo kan een security-incident met je CRM-systeem niet alleen leiden tot het uitlekken van klantgegevens met reputatie- en imagoschade tot gevolg, ook kan je hierdoor (langere) tijd geen toegang meer hebben tot gegevens die nodig zijn voor het adequaat ondersteunen van klanten. Hoe meer autorisaties aan een account zijn toegewezen, hoe verder een aanvaller zich over je netwerk kan verspreiden en schade kan aanrichten. Je verbetert met de koppeling tegelijkertijd je serviceniveau. Je kunt onder meer gebruikers sneller op weg helpen en ondersteunen, terwijl werknemers optimaal productief kunnen zijn doordat zij altijd over de juiste accounts en autorisaties beschikken. Tegelijkertijd ben je minder tijd kwijt aan het corrigeren van vermijdbare fouten. 
 
 
-# Salesforce via HelloID koppelen met systemen
+## Salesforce via HelloID koppelen met systemen
 
 Met behulp van HelloID kan je diverse andere systemen met Salesforce integreren, waaronder een scala aan bronsystemen. De integraties tillen het beheer van zowel gebruikersaccounts als autorisaties naar een hoger niveau. Voorbeelden van veelvoorkomende integraties zijn: 
 
