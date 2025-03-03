@@ -26,8 +26,6 @@ The _HelloID-Conn-Prov-Target-SalesForce_ connector creates/updates user account
 
 > The code used for this connector is based on the _https://github.com/Tools4everBV/HelloID-Conn-Prov-Target-Generic-Scim_ generic scim connector.
 
-> Note that this connector has not been tested on a SalesForce implementation. Changes might have to be made to the code according to your requirements
-
 ## Getting started
 
 ### Connection settings
