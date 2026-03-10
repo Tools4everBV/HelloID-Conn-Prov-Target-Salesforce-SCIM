@@ -1,26 +1,10 @@
-#####################################################
-# HelloID-Conn-Prov-Target-Salesforce-Update
-#
-# Version: 1.0.0.3
-#####################################################
-$VerbosePreference = 'Continue'
+#################################################
+# HelloID-Conn-Prov-Target-Salesforce-SCIM-Update
+# PowerShell V2
+#################################################
 
-# Initialize default value's
-$config = $configuration | ConvertFrom-Json
-$p = $person | ConvertFrom-Json
-$aRef = $AccountReference | ConvertFrom-Json
-$pd = $personDifferences | ConvertFrom-Json
-$success = $false
-$auditLogs = New-Object Collections.Generic.List[PSCustomObject]
-
-$account = [PSCustomObject]@{
-    GivenName           = $pd.Name.GivenName.New
-    FamilyName          = $pd.Name.FamilyName.New
-    FamilyNameFormatted = $pd.DisplayName.New
-    FamilyNamePrefix    = $pd.DisplayName.FamilyNamePrefix.New
-    IsUserActive        = $true
-    Department          = $pd.PrimaryContract.Department.DisplayName.New
-}
+# Enable TLS1.2
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
 #region functions
 function Get-ScimOAuthToken {
@@ -33,11 +17,11 @@ function Get-ScimOAuthToken {
         [Parameter(Mandatory)]
         [string]
         $ClientSecret,
-        
+
         [Parameter(Mandatory)]
         [string]
         $UserName,
-        
+
         [Parameter(Mandatory)]
         [string]
         $Password,
@@ -48,7 +32,7 @@ function Get-ScimOAuthToken {
     )
 
     try {
-        Write-Verbose "Invoking command '$($MyInvocation.MyCommand)'"
+        Write-Information "Invoking command '$($MyInvocation.MyCommand)'"
         $headers = @{
             "content-type" = "application/x-www-form-urlencoded"
         }
@@ -59,135 +43,313 @@ function Get-ScimOAuthToken {
             Headers = $Headers
         }
         Invoke-RestMethod @splatParams
-        Write-Verbose 'Finished retrieving accessToken'
-    } catch {
+        Write-Information 'Finished retrieving accessToken'
+    }
+    catch {
         $PSCmdlet.ThrowTerminatingError($PSItem)
     }
 }
 
-function Resolve-HTTPError {
+function Resolve-SalesforceError {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory,
-            ValueFromPipeline
-        )]
-        [object]$ErrorObject
+        [Parameter(Mandatory)]
+        [object]
+        $ErrorObject
     )
     process {
-        $HttpErrorObj = [PSCustomObject]@{
-            FullyQualifiedErrorId = $ErrorObject.FullyQualifiedErrorId
-            MyCommand             = $ErrorObject.InvocationInfo.MyCommand
-            RequestUri            = $ErrorObject.TargetObject.RequestUri
-            ScriptStackTrace      = $ErrorObject.ScriptStackTrace
-            ErrorMessage          = ''
+        $httpErrorObj = [PSCustomObject]@{
+            ScriptLineNumber = $ErrorObject.InvocationInfo.ScriptLineNumber
+            Line             = $ErrorObject.InvocationInfo.Line
+            ErrorDetails     = $ErrorObject.Exception.Message
+            FriendlyMessage  = $ErrorObject.Exception.Message
         }
-        if ($ErrorObject.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') {
-            $HttpErrorObj.ErrorMessage = $ErrorObject.ErrorDetails.Message
-        } elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
-            $stream = $ErrorObject.Exception.Response.GetResponseStream()
-            $stream.Position = 0
-            $streamReader = New-Object System.IO.StreamReader $Stream
-            $errorResponse = $StreamReader.ReadToEnd()
-            $HttpErrorObj.ErrorMessage = $errorResponse
+        if (-not [string]::IsNullOrEmpty($ErrorObject.ErrorDetails.Message)) {
+            $httpErrorObj.ErrorDetails = $ErrorObject.ErrorDetails.Message
         }
-        Write-Output $HttpErrorObj
+        elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
+            if ($null -ne $ErrorObject.Exception.Response) {
+                $streamReaderResponse = [System.IO.StreamReader]::new($ErrorObject.Exception.Response.GetResponseStream()).ReadToEnd()
+                if (-not [string]::IsNullOrEmpty($streamReaderResponse)) {
+                    $httpErrorObj.ErrorDetails = $streamReaderResponse
+                }
+            }
+        }
+        try {
+            $errorDetailsObject = ($httpErrorObj.ErrorDetails | ConvertFrom-Json)
+            $httpErrorObj.FriendlyMessage = $errorDetailsObject.detail
+        }
+        catch {
+            $httpErrorObj.FriendlyMessage = $httpErrorObj.ErrorDetails
+        }
+        Write-Output $httpErrorObj
+    }
+}
+
+function ConvertTo-HelloIDAccountObject {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [object]
+        $AccountObject
+    )
+    process {
+
+        # Making sure only fieldMapping fields are imported
+        $helloidAccountObject = [PSCustomObject]@{}
+        foreach ($property in $actionContext.Data.PSObject.Properties) {
+            switch ($property.Name) {
+                'employeeNumber' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue $AccountObject.employeeNumber }
+                'userName' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue $AccountObject.userName }
+                'givenName' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue $AccountObject.name.givenName }
+                'familyName' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue $AccountObject.name.familyName }
+                'familyNameFormatted' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue $AccountObject.name.familyNameFormatted }
+                'familyNamePrefix' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue $AccountObject.name.familyNamePrefix }
+                'department' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue $AccountObject.department }
+                'mobilePhone' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue $AccountObject.phoneNumbers.value }
+                'mobilePhoneType' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue $AccountObject.phoneNumbers.type }
+                'active' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue $AccountObject.active }
+                'emailAddress' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue $AccountObject.emailAddress }
+                'isEmailPrimary' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue "$($AccountObject.isEmailPrimary)" }
+                'emailAddressType' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue $AccountObject.emailAddressType }
+                'emailEncodingKey' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue $AccountObject.emailEncodingKey }
+                'userType' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue $AccountObject.userType }
+                'id' { $helloidAccountObject | Add-Member -NotePropertyName $property.Name -NotePropertyValue $AccountObject.id }
+            }
+        }
+        Write-Output $helloidAccountObject
     }
 }
 #endregion
 
-if (-not($dryRun -eq $true)) {
+try {
+    # Verify if [aRef] has a value
+    if ([string]::IsNullOrEmpty($($actionContext.References.Account))) {
+        throw 'The account reference could not be found'
+    }
+
+    Write-Information 'Retrieving accessToken'
+    $splatTokenParams = @{
+        ClientID          = $($actionContext.Configuration.ClientID)
+        ClientSecret      = $($actionContext.Configuration.ClientSecret)
+        UserName          = $($actionContext.Configuration.UserName)
+        Password          = $($actionContext.Configuration.Password)
+        AuthenticationUri = $($actionContext.Configuration.AuthenticationUri)
+    }
+    $accessToken = Get-ScimOAuthToken @splatTokenParams
+
+    Write-Information 'Adding token to authorization headers'
+    $headers = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
+    $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
+
+    Write-Information 'Getting instance url'
+    $instanceUri = $($actionContext.Configuration.BaseUrl)
+
+    Write-Information 'Verifying if a Salesforce-SCIM account exists'
     try {
-        Write-Verbose "Updating account '$($aRef)' for '$($p.DisplayName)'"
-        Write-Verbose 'Retrieving accessToken'
-        $splatTokenParams = @{
-            ClientID          = $($config.ClientID)
-            ClientSecret      = $($config.ClientSecret)
-            UserName          = $($config.UserName)
-            Password          = $($config.Password)
-            AuthenticationUri = $($config.AuthenticationUri)
-        }
-        $accessToken = Get-ScimOAuthToken @splatTokenParams
-        Write-Verbose 'Adding token to authorization headers'
-        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-        $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
-        Write-Verbose 'Getting instance url'
-        $instanceUri = $($config.baseUrl)
-
-        [System.Collections.Generic.List[object]]$operations = @()
-
-        if ($account.FamilyName){
-            $operations.Add(
-                [PSCustomObject]@{
-                    op = "Replace"
-                    value = @{
-                        name = @{
-                            formatted        = $account.FamilyNameFormatted
-                            familyName       = $account.FamilyName
-                            familyNamePrefix = $account.FamilyNamePrefix
-                            givenName        = $account.GivenName
-                        }
-                  }
-         }
-              ) 
-       }
-
-        if ($account.Department){
-            $operations.Add(
-                [PSCustomObject]@{
-                    op = "Replace"
-                    value = @{
-                        department = $account.Department
-                    }
-                }
-            )
-        }
-
-        $body = [ordered]@{
-            schemas = @(
-                "urn:ietf:params:scim:api:messages:2.0:PatchOp"
-            )
-            Operations = $operations
-        } | ConvertTo-Json -Depth 10
-        
-        $splatParams = @{
-            Uri     = "$instanceUri/services/scim/v2/Users/$aRef"
+        $splatGetUserParams = @{
+            Uri     = "$instanceUri/services/scim/v2/Users/$($actionContext.References.Account)"
             Headers = $headers
             Body    = $body
-            Method  = 'Patch'
+            Method  = 'GET'
+        }
+        $responseAccount = Invoke-RestMethod @splatGetUserParams
+        $correlatedAccount = ConvertTo-HelloIDAccountObject -AccountObject $responseAccount
+        $outputContext.PreviousData = $correlatedAccount
+
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode -eq 404) {
+            $correlatedAccount = $null
+        }
+        else {
+            throw $_
+        }
+    }
+
+    if ($null -ne $correlatedAccount) {
+        $splatCompareProperties = @{
+            ReferenceObject  = @($correlatedAccount.PSObject.Properties)
+            DifferenceObject = @($actionContext.Data.PSObject.Properties)
+        }
+        $propertiesChanged = Compare-Object @splatCompareProperties -PassThru | Where-Object { $_.SideIndicator -eq '=>' }
+        if ($propertiesChanged) {
+            $action = 'UpdateAccount'
+        }
+        else {
+            $action = 'NoChanges'
+        }
+    }
+    else {
+        $action = 'NotFound'
+    }
+
+    # Process
+    switch ($action) {
+        'UpdateAccount' {
+            Write-Information "Account property(s) required to update: $($propertiesChanged.Name -join ', ')"
+            if (-not($actionContext.DryRun -eq $true)) {
+                Write-Information "Updating Salesforce-SCIM account with accountReference: [$($actionContext.References.Account)]"
+                [System.Collections.Generic.List[object]]$operations = @()
+                foreach ($property in $propertiesChanged) {
+                    switch ($property.Name) {
+                        'department' {
+                            $operations.Add(
+                                [PSCustomObject]@{
+                                    op    = 'Replace'
+                                    path  = 'department'
+                                    value = $property.Value
+                                }
+                            )
+                        }
+                        'emailAddress' {
+                            $operations.Add(
+                                [PSCustomObject]@{
+                                    op    = 'Replace'
+                                    path  = 'emails.value'
+                                    value = $property.Value
+                                }
+                            )
+                        }
+                        'emailAddressType' {
+                            $operations.Add(
+                                [PSCustomObject]@{
+                                    op    = 'Replace'
+                                    path  = 'emails.type'
+                                    value = $property.Value
+                                }
+                            )
+                        }
+                        'employeeNumber' {
+                            $operations.Add(
+                                [PSCustomObject]@{
+                                    op    = 'Replace'
+                                    path  = 'employeeNumber'
+                                    value = $property.Value
+                                }
+                            )
+                        }
+                        'familyName' {
+                            $operations.Add(
+                                [PSCustomObject]@{
+                                    op    = 'Replace'
+                                    path  = 'name.familyName'
+                                    value = $property.Value
+                                }
+                            )
+                        }
+                        'familyNamePrefix' {
+                            $operations.Add(
+                                [PSCustomObject]@{
+                                    op    = 'Replace'
+                                    path  = 'name.familyNamePrefix'
+                                    value = $property.Value
+                                }
+                            )
+                        }
+                        'familyNameFormatted' {
+                            $operations.Add(
+                                [PSCustomObject]@{
+                                    op    = 'Replace'
+                                    path  = 'name.formatted'
+                                    value = $property.Value
+                                }
+                            )
+                        }
+                        'givenName' {
+                            $operations.Add(
+                                [PSCustomObject]@{
+                                    op    = 'Replace'
+                                    path  = 'name.givenName'
+                                    value = $property.Value
+                                }
+                            )
+                        }
+                        'mobilePhone' {
+                            $operations.Add(
+                                [PSCustomObject]@{
+                                    op    = 'Replace'
+                                    path  = 'phoneNumbers.value'
+                                    value = $property.Value
+                                }
+                            )
+                        }
+                        'userName' {
+                            $operations.Add(
+                                [PSCustomObject]@{
+                                    op    = 'Replace'
+                                    path  = 'userName'
+                                    value = $property.Value
+                                }
+                            )
+                        }
+                    }
+                }
+
+                $body = [ordered]@{
+                    schemas    = @(
+                        'urn:ietf:params:scim:api:messages:2.0:PatchOp'
+                    )
+                    Operations = $operations
+                } | ConvertTo-Json
+
+                $splatUpdateUser = @{
+                    Uri         = "$instanceUri/services/scim/v2/Users/$($actionContext.References.Account)"
+                    Headers     = $headers
+                    Body        = $body
+                    Method      = 'PATCH'
+                    ContentType = 'application/json'
+                }
+                $null = Invoke-RestMethod @splatUpdateUser
+            }
+            else {
+                Write-Information "[DryRun] Update Salesforce-SCIM account with accountReference: [$($actionContext.References.Account)], will be executed during enforcement"
+            }
+
+            $outputContext.Success = $true
+            $outputContext.AuditLogs.Add([PSCustomObject]@{
+                    Message = "Update account was successful, Account property(s) updated: [$($propertiesChanged.name -join ',')]"
+                    IsError = $false
+                })
+            break
         }
 
-        write-verbose $operations.count
+        'NoChanges' {
+            Write-Information "No changes to Salesforce-SCIM account with accountReference: [$($actionContext.References.Account)]"
+            $outputContext.Success = $true
+            $outputContext.AuditLogs.Add([PSCustomObject]@{
+                    Message = "Skipped updating Salesforce-SCIM account with AccountReference: [$($actionContext.References.Account)]. Reason: No changes."
+                    IsError = $false
+                })
+            break
+        }
 
-        If($operations.count -gt 0){
-        $results = Invoke-RestMethod @splatParams
-        if ($results.id){
-            $success = $true
-            $auditLogs.Add([PSCustomObject]@{
-                Message = "Update account for: $($p.DisplayName) was successful."
-                IsError = $False
-            })
+        'NotFound' {
+            Write-Information "Salesforce-SCIM account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted"
+            $outputContext.Success = $false
+            $outputContext.AuditLogs.Add([PSCustomObject]@{
+                    Message = "Salesforce-SCIM account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted"
+                    IsError = $true
+                })
+            break
         }
-        } $success = $true
-    } catch {
-        $success = $false
-        $ex = $PSItem
-        if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
-            $errorObj = Resolve-HTTPError -Error $ex
-            $errorMessage = "Could not update salesforce account for: $($p.DisplayName). Error: $($errorObj.ErrorMessage)"
-        } else {
-            $errorMessage = "Could not update salesforce account for: $($p.DisplayName). Error: $($ex.Exception.Message)"
-        }
-        Write-Error $errorMessage
-        $auditLogs.Add([PSCustomObject]@{
-            Message = $errorMessage
+    }
+}
+catch {
+    $outputContext.Success = $false
+    $ex = $PSItem
+    if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
+        $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
+        $errorObj = Resolve-SalesforceError -ErrorObject $ex
+        $auditLogMessage = "Could not update Salesforce-SCIM account. Error: $($errorObj.FriendlyMessage)"
+        Write-Warning "Error at Line '$($errorObj.ScriptLineNumber)': $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
+    }
+    else {
+        $auditLogMessage = "Could not update Salesforce-SCIM account. Error: $($ex.Exception.Message)"
+        Write-Warning "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
+    }
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
+            Message = $auditLogMessage
             IsError = $true
         })
-    } finally {
-        $result = [PSCustomObject]@{
-            Success          = $success
-            Account          = $account
-            AuditDetails     = $auditMessage
-        }
-        Write-Output $result | ConvertTo-Json -Depth 10
-    }
 }

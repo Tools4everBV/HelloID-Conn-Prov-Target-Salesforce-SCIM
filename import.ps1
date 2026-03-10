@@ -1,5 +1,5 @@
 #################################################
-# HelloID-Conn-Prov-Target-Salesforce-SCIM-Delete
+# HelloID-Conn-Prov-Target-Salesforce-SCIM-Import
 # PowerShell V2
 #################################################
 
@@ -85,14 +85,37 @@ function Resolve-SalesforceError {
         Write-Output $httpErrorObj
     }
 }
+
+function ConvertTo-HelloIDAccountObject {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [object]$AccountObject
+    )
+
+    [PSCustomObject]@{
+        employeeNumber     = $AccountObject.employeeNumber
+        userName           = $AccountObject.userName
+        givenName          = $AccountObject.name.givenName
+        familyName         = $AccountObject.name.familyName
+        familyNameFormatted= $AccountObject.name.familyNameFormatted
+        familyNamePrefix   = $AccountObject.name.familyNamePrefix
+        department         = $AccountObject.department
+        mobilePhone        = $AccountObject.phoneNumbers.value
+        mobilePhoneType    = $AccountObject.phoneNumbers.type
+        active             = $AccountObject.active
+        emailAddress       = $AccountObject.emailAddress
+        isEmailPrimary     = [string]$AccountObject.isEmailPrimary
+        emailAddressType   = $AccountObject.emailAddressType
+        emailEncodingKey   = $AccountObject.emailEncodingKey
+        userType           = $AccountObject.userType
+        id                 = $AccountObject.id
+    }
+}
 #endregion
 
 try {
-    # Verify if [aRef] has a value
-    if ([string]::IsNullOrEmpty($($actionContext.References.Account))) {
-        throw 'The account reference could not be found'
-    }
-
+    Write-Information 'Starting Salesforce-SCIM account entitlement import'
     Write-Information 'Retrieving accessToken'
     $splatTokenParams = @{
         ClientID          = $($actionContext.Configuration.ClientID)
@@ -104,108 +127,71 @@ try {
     $accessToken = Get-ScimOAuthToken @splatTokenParams
 
     Write-Information 'Adding token to authorization headers'
-    $headers = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
+    $headers = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
     $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
 
     Write-Information 'Getting instance url'
     $instanceUri = $($actionContext.Configuration.BaseUrl)
 
-    Write-Information 'Verifying if a Salesforce-SCIM account exists'
-    try {
-        $splatGetUserParams = @{
-            Uri     = "$instanceUri/services/scim/v2/Users/$($actionContext.References.Account)"
-            Headers = $headers
-            Body    = $body
+    $take = 20
+    $startIndex = 0
+    do {
+        $splatImportAccountParams = @{
+            Uri     = "$instanceUri/services/scim/v2/Users?startIndex=$($startIndex)&count=$($take)"
             Method  = 'GET'
+            Headers = $headers
         }
-        $correlatedAccount = Invoke-RestMethod @splatGetUserParams
-    }
-    catch {
-        if ($_.Exception.Response.StatusCode -eq 404) {
-            $correlatedAccount = $null
-        }
-        else {
-            throw $_
-        }
-    }
 
-    if ($null -ne $correlatedAccount) {
-        $action = 'DeleteAccount'
-    }
-    else {
-        $action = 'NotFound'
-    }
+        $response = Invoke-RestMethod @splatImportAccountParams
 
-    # Process
-    switch ($action) {
-        'DeleteAccount' {
-            if (-not($actionContext.DryRun -eq $true)) {
-                Write-Information "Deleting Salesforce-SCIM account with accountReference: [$($actionContext.References.Account)]"
-                [System.Collections.Generic.List[object]]$operations = @()
-                $operations.Add(
-                    [PSCustomObject]@{
-                        op    = "Replace"
-                        value = @{
-                            active = $false
-                        }
-                    }
-                )
+        $result = $response.Resources
+        $totalResults = $response.totalResults
 
-                $body = [ordered]@{
-                    schemas    = @(
-                        "urn:ietf:params:scim:api:messages:2.0:PatchOp"
-                    )
-                    Operations = $operations
-                } | ConvertTo-Json -Depth 10
+        if ($null -ne $result) {
+            foreach ($importedAccount in $result) {
+                $data = ConvertTo-HelloIDAccountObject -AccountObject $importedAccount
 
-                $splatDeleteParams = @{
-                    Uri     = "$instanceUri/services/scim/v2/Users/$($actionContext.References.Account)"
-                    Headers = $headers
-                    Body    = $body
-                    Method  = 'PATCH'
+                # Set Enabled based on importedAccount status
+                $isEnabled = $false
+                if ($importedAccount.active -eq $true) {
+                    $isEnabled = $true
                 }
-                $null = Invoke-RestMethod @splatDeleteParams
 
+                # Make sure the displayName has a value
+                $displayName = "$($importedAccount.name.formatted)"
+                if ([string]::IsNullOrEmpty($displayName)) {
+                    $displayName = $importedAccount.id
+                }
+
+                # Make sure the userName has a value
+                $UserName = $importedAccount.UserName
+                if ([string]::IsNullOrWhiteSpace($UserName)) {
+                    $UserName = $importedAccount.id
+                }
+
+                Write-Output @{
+                    AccountReference = $importedAccount.id
+                    displayName      = $displayName
+                    UserName         = $UserName
+                    Enabled          = $isEnabled
+                    Data             = $data
+                }
+                $startIndex++
             }
-            else {
-                Write-Information "[DryRun] Delete Salesforce-SCIM account with accountReference: [$($actionContext.References.Account)], will be executed during enforcement"
-            }
-
-            $outputContext.Success = $true
-            $outputContext.AuditLogs.Add([PSCustomObject]@{
-                    Message = "Delete account: [$($actionContext.References.Account)] was successful. Action initiated by: [$($actionContext.Origin)]"
-                    IsError = $false
-                })
-            break
         }
-
-        'NotFound' {
-            Write-Information "Salesforce-SCIM account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted"
-            $outputContext.Success = $true
-            $outputContext.AuditLogs.Add([PSCustomObject]@{
-                    Message = "Salesforce-SCIM account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted"
-                    IsError = $false
-                })
-            break
-        }
-    }
-
+    } while (($result.count -gt 0) -and ($startIndex -lt $totalResults))
+    Write-Information 'Salesforce-SCIM account entitlement import completed'
 }
 catch {
-    $outputContext.success = $false
     $ex = $PSItem
     if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
         $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
         $errorObj = Resolve-SalesforceError -ErrorObject $ex
-        $auditLogMessage = "Could not delete Salesforce-SCIM account. Error: $($errorObj.FriendlyMessage)"
         Write-Warning "Error at Line '$($errorObj.ScriptLineNumber)': $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
+        Write-Error "Could not import Salesforce-SCIM account entitlements. Error: $($errorObj.FriendlyMessage)"
     }
     else {
-        $auditLogMessage = "Could not delete Salesforce-SCIM account. Error: $($_.Exception.Message)"
         Write-Warning "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
+        Write-Error "Could not import Salesforce-SCIM account entitlements. Error: $($ex.Exception.Message)"
     }
-    $outputContext.AuditLogs.Add([PSCustomObject]@{
-            Message = $auditLogMessage
-            IsError = $true
-        })
 }
