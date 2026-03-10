@@ -1,16 +1,10 @@
-#####################################################
-# HelloID-Conn-Prov-Target-Salesforce-Enable
-#
-# Version: 1.0.0.2
-#####################################################
-$VerbosePreference = 'Continue'
+#################################################
+# HelloID-Conn-Prov-Target-Salesforce-SCIM-Enable
+# PowerShell V2
+#################################################
 
-# Initialize default value's
-$config = $configuration | ConvertFrom-Json
-$p = $person | ConvertFrom-Json
-$aRef = $AccountReference | ConvertFrom-Json
-$success = $false
-$auditLogs = New-Object Collections.Generic.List[PSCustomObject]
+# Enable TLS1.2
+[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
 
 #region functions
 function Get-ScimOAuthToken {
@@ -23,11 +17,11 @@ function Get-ScimOAuthToken {
         [Parameter(Mandatory)]
         [string]
         $ClientSecret,
-        
+
         [Parameter(Mandatory)]
         [string]
         $UserName,
-        
+
         [Parameter(Mandatory)]
         [string]
         $Password,
@@ -38,7 +32,7 @@ function Get-ScimOAuthToken {
     )
 
     try {
-        Write-Verbose "Invoking command '$($MyInvocation.MyCommand)'"
+        Write-Information "Invoking command '$($MyInvocation.MyCommand)'"
         $headers = @{
             "content-type" = "application/x-www-form-urlencoded"
         }
@@ -49,115 +43,169 @@ function Get-ScimOAuthToken {
             Headers = $Headers
         }
         Invoke-RestMethod @splatParams
-        Write-Verbose 'Finished retrieving accessToken'
-    } catch {
+        Write-Information 'Finished retrieving accessToken'
+    }
+    catch {
         $PSCmdlet.ThrowTerminatingError($PSItem)
     }
 }
 
-function Resolve-HTTPError {
+function Resolve-SalesforceError {
     [CmdletBinding()]
     param (
-        [Parameter(Mandatory,
-            ValueFromPipeline
-        )]
-        [object]$ErrorObject
+        [Parameter(Mandatory)]
+        [object]
+        $ErrorObject
     )
     process {
-        $HttpErrorObj = [PSCustomObject]@{
-            FullyQualifiedErrorId = $ErrorObject.FullyQualifiedErrorId
-            MyCommand             = $ErrorObject.InvocationInfo.MyCommand
-            RequestUri            = $ErrorObject.TargetObject.RequestUri
-            ScriptStackTrace      = $ErrorObject.ScriptStackTrace
-            ErrorMessage          = ''
+        $httpErrorObj = [PSCustomObject]@{
+            ScriptLineNumber = $ErrorObject.InvocationInfo.ScriptLineNumber
+            Line             = $ErrorObject.InvocationInfo.Line
+            ErrorDetails     = $ErrorObject.Exception.Message
+            FriendlyMessage  = $ErrorObject.Exception.Message
         }
-        if ($ErrorObject.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') {
-            $HttpErrorObj.ErrorMessage = $ErrorObject.ErrorDetails.Message
-        } elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
-            $stream = $ErrorObject.Exception.Response.GetResponseStream()
-            $stream.Position = 0
-            $streamReader = New-Object System.IO.StreamReader $Stream
-            $errorResponse = $StreamReader.ReadToEnd()
-            $HttpErrorObj.ErrorMessage = $errorResponse
+        if (-not [string]::IsNullOrEmpty($ErrorObject.ErrorDetails.Message)) {
+            $httpErrorObj.ErrorDetails = $ErrorObject.ErrorDetails.Message
         }
-        Write-Output $HttpErrorObj
+        elseif ($ErrorObject.Exception.GetType().FullName -eq 'System.Net.WebException') {
+            if ($null -ne $ErrorObject.Exception.Response) {
+                $streamReaderResponse = [System.IO.StreamReader]::new($ErrorObject.Exception.Response.GetResponseStream()).ReadToEnd()
+                if (-not [string]::IsNullOrEmpty($streamReaderResponse)) {
+                    $httpErrorObj.ErrorDetails = $streamReaderResponse
+                }
+            }
+        }
+        try {
+            $errorDetailsObject = ($httpErrorObj.ErrorDetails | ConvertFrom-Json)
+            $httpErrorObj.FriendlyMessage = $errorDetailsObject.detail
+        }
+        catch {
+            $httpErrorObj.FriendlyMessage = $httpErrorObj.ErrorDetails
+        }
+        Write-Output $httpErrorObj
     }
 }
 #endregion
 
-if (-not($dryRun -eq $true)) {
+try {
+    # Verify if [aRef] has a value
+    if ([string]::IsNullOrEmpty($($actionContext.References.Account))) {
+        throw 'The account reference could not be found'
+    }
+
+    Write-Information 'Retrieving accessToken'
+    $splatTokenParams = @{
+        ClientID          = $($actionContext.Configuration.ClientID)
+        ClientSecret      = $($actionContext.Configuration.ClientSecret)
+        UserName          = $($actionContext.Configuration.UserName)
+        Password          = $($actionContext.Configuration.Password)
+        AuthenticationUri = $($actionContext.Configuration.AuthenticationUri)
+    }
+    $accessToken = Get-ScimOAuthToken @splatTokenParams
+
+    Write-Information 'Adding token to authorization headers'
+    $headers = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
+    $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
+
+    Write-Information 'Getting instance url'
+    $instanceUri = $($actionContext.Configuration.BaseUrl)
+
+    Write-Information 'Verifying if a Salesforce-SCIM account exists'
     try {
-        Write-Verbose "Enabling account '$($aRef)' for '$($p.DisplayName)'"
-        Write-Verbose "Retrieving accessToken"
-        $splatTokenParams = @{
-            ClientID          = $($config.ClientID)
-            ClientSecret      = $($config.ClientSecret)
-            UserName          = $($config.UserName)
-            Password          = $($config.Password)
-            AuthenticationUri = $($config.AuthenticationUri)
-        }
-        $accessToken = Get-ScimOAuthToken @splatTokenParams
-        Write-Verbose 'Adding token to authorization headers'
-        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-        $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
-        Write-Verbose 'Getting instance url'
-        $instanceUri = $($config.baseUrl)
-
-        [System.Collections.Generic.List[object]]$operations = @()
-
-        $operations.Add(
-            [PSCustomObject]@{
-                op = "Replace"
-                value = @{
-                    active = $true
-                }
-            }
-        )
-
-        $body = [ordered]@{
-            schemas = @(
-                "urn:ietf:params:scim:api:messages:2.0:PatchOp"
-            )
-            Operations = $operations
-        } | ConvertTo-Json -Depth 10
-
-        Write-Verbose 'Adding Authorization headers'
-        $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-        $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
-        
-        $splatParams = @{
-            Uri     = "$instanceUri/services/scim/v2/Users/$aRef"
+        $splatGetUserParams = @{
+            Uri     = "$instanceUri/services/scim/v2/Users/$($actionContext.References.Account)"
             Headers = $headers
             Body    = $body
-            Method  = 'Patch'
+            Method  = 'GET'
         }
-        $results = Invoke-RestMethod @splatParams
-        if ($results.id){
-            $success = $true
-            $auditLogs.Add([PSCustomObject]@{
-                Message = "Enable account for: $($p.DisplayName) was successful."
-                IsError = $False
-            })
+        $correlatedAccount = Invoke-RestMethod @splatGetUserParams
+    }
+    catch {
+        if ($_.Exception.Response.StatusCode -eq 404) {
+            $correlatedAccount = $null
         }
-    } catch {
-        $success = $false
-        $ex = $PSItem
-        if ( $($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
-            $errorObj = Resolve-HTTPError -Error $ex
-            $errorMessage = "Could not enable salesforce account for: $($p.DisplayName). Error: $($errorObj.ErrorMessage)"
-        } else {
-            $errorMessage = "Could not enable salesforce account for: $($p.DisplayName). Error: $($ex.Exception.Message)"
+        else {
+            throw $_
         }
-        Write-Error $errorMessage
-        $auditLogs.Add([PSCustomObject]@{
-            Message = $errorMessage
+    }
+
+    if ($null -ne $correlatedAccount) {
+        $action = 'EnableAccount'
+    }
+    else {
+        $action = 'NotFound'
+    }
+
+    # Process
+    switch ($action) {
+        'EnableAccount' {
+            if (-not($actionContext.DryRun -eq $true)) {
+                Write-Information "Enabling Salesforce-SCIM account with accountReference: [$($actionContext.References.Account)]"
+                [System.Collections.Generic.List[object]]$operations = @()
+                $operations.Add(
+                    [PSCustomObject]@{
+                        op    = "Replace"
+                        value = @{
+                            active = $true
+                        }
+                    }
+                )
+
+                $body = [ordered]@{
+                    schemas    = @(
+                        "urn:ietf:params:scim:api:messages:2.0:PatchOp"
+                    )
+                    Operations = $operations
+                } | ConvertTo-Json -Depth 10
+
+                $splatEnableParams = @{
+                    Uri     = "$instanceUri/services/scim/v2/Users/$($actionContext.References.Account)"
+                    Headers = $headers
+                    Body    = $body
+                    Method  = 'PATCH'
+                }
+                $null = Invoke-RestMethod @splatEnableParams
+
+            }
+            else {
+                Write-Information "[DryRun] Enable Salesforce-SCIM account with accountReference: [$($actionContext.References.Account)], will be executed during enforcement"
+            }
+
+            $outputContext.Success = $true
+            $outputContext.AuditLogs.Add([PSCustomObject]@{
+                    Message = 'Enable account was successful'
+                    IsError = $false
+                })
+            break
+        }
+
+        'NotFound' {
+            Write-Information "Salesforce-SCIM account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted"
+            $outputContext.Success = $false
+            $outputContext.AuditLogs.Add([PSCustomObject]@{
+                    Message = "Salesforce-SCIM account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted"
+                    IsError = $true
+                })
+            break
+        }
+    }
+
+}
+catch {
+    $outputContext.success = $false
+    $ex = $PSItem
+    if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
+        $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
+        $errorObj = Resolve-SalesforceError -ErrorObject $ex
+        $auditLogMessage = "Could not enable Salesforce-SCIM account. Error: $($errorObj.FriendlyMessage)"
+        Write-Warning "Error at Line '$($errorObj.ScriptLineNumber)': $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
+    }
+    else {
+        $auditLogMessage = "Could not enable Salesforce-SCIM account. Error: $($_.Exception.Message)"
+        Write-Warning "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
+    }
+    $outputContext.AuditLogs.Add([PSCustomObject]@{
+            Message = $auditLogMessage
             IsError = $true
         })
-    } finally {
-        $result = [PSCustomObject]@{
-            Success          = $success
-            AuditDetails     = $auditMessage
-        }
-        Write-Output $result | ConvertTo-Json -Depth 10
-    }
 }

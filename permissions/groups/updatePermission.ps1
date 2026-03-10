@@ -1,7 +1,7 @@
-#################################################
-# HelloID-Conn-Prov-Target-Salesforce-SCIM-Delete
+#################################################################
+# HelloID-Conn-Prov-Target-Salesforce-SCIM-UpdatePermission-Group
 # PowerShell V2
-#################################################
+#################################################################
 
 # Enable TLS1.2
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
@@ -50,6 +50,81 @@ function Get-ScimOAuthToken {
     }
 }
 
+function Invoke-ScimRestMethod {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $Method,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $InstanceUri,
+
+        [Parameter(Mandatory)]
+        [ValidateNotNullOrEmpty()]
+        [string]
+        $Endpoint,
+
+        [object]
+        $Body,
+
+        [string]
+        $ContentType = 'application/json',
+
+        [Parameter(Mandatory)]
+        [System.Collections.IDictionary]
+        $Headers,
+
+        [string]
+        $TotalResults
+    )
+
+    try {
+        Write-Information "Invoking command '$($MyInvocation.MyCommand)'"
+        [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor [System.Net.SecurityProtocolType]::Tls12
+
+        $baseUrl = "$InstanceUri/services/scim/v2"
+        $splatParams = @{
+            Headers     = $Headers
+            Method      = $Method
+            ContentType = $ContentType
+        }
+
+        if ($Body) {
+            Write-Information 'Adding body to request'
+            $splatParams['Body'] = $Body
+        }
+
+        if ($TotalResults) {
+            # Fixed value since each page contains 20 items max
+            $count = 20
+            $startIndex = 1
+            [System.Collections.Generic.List[object]]$dataList = @()
+            Write-Information 'Using pagination to retrieve results'
+            do {
+                $splatParams['Uri'] = "$($baseUrl)/$($Endpoint)?startIndex=$startIndex&count=$count"
+                $result = Invoke-RestMethod @splatParams
+                $null = $startIndex + $count + $count
+                foreach ($resource in $result.Resources) {
+                    $dataList.Add($resource)
+                }
+                $startIndex = $count + $startIndex
+            } until ($dataList.Count -eq $TotalResults)
+            Write-Output $dataList
+        }
+        else {
+            $splatParams['Uri'] = "$baseUrl/$Endpoint"
+            Invoke-RestMethod @splatParams
+        }
+    }
+    catch {
+        $PSCmdlet.ThrowTerminatingError($_)
+    }
+}
+
 function Resolve-SalesforceError {
     [CmdletBinding()]
     param (
@@ -87,6 +162,7 @@ function Resolve-SalesforceError {
 }
 #endregion
 
+# Begin
 try {
     # Verify if [aRef] has a value
     if ([string]::IsNullOrEmpty($($actionContext.References.Account))) {
@@ -104,7 +180,7 @@ try {
     $accessToken = Get-ScimOAuthToken @splatTokenParams
 
     Write-Information 'Adding token to authorization headers'
-    $headers = [System.Collections.Generic.Dictionary[[String],[String]]]::new()
+    $headers = [System.Collections.Generic.Dictionary[[String], [String]]]::new()
     $headers.Add("Authorization", "Bearer $($accessToken.access_token)")
 
     Write-Information 'Getting instance url'
@@ -130,7 +206,7 @@ try {
     }
 
     if ($null -ne $correlatedAccount) {
-        $action = 'DeleteAccount'
+        $action = 'UpdatePermission'
     }
     else {
         $action = 'NotFound'
@@ -138,15 +214,22 @@ try {
 
     # Process
     switch ($action) {
-        'DeleteAccount' {
+        'UpdatePermission' {
             if (-not($actionContext.DryRun -eq $true)) {
-                Write-Information "Deleting Salesforce-SCIM account with accountReference: [$($actionContext.References.Account)]"
+                Write-Information "Updating Salesforce-SCIM permission: [$($actionContext.PermissionDisplayName)] - [$($actionContext.References.Permission.Reference)]"
                 [System.Collections.Generic.List[object]]$operations = @()
+                [System.Collections.Generic.List[object]]$entitlementList = @()
+                $entitlementList.Add(
+                    [PSCustomObject]@{
+                        value = $($actionContext.References.Permission.Reference)
+                    }
+                )
+
                 $operations.Add(
                     [PSCustomObject]@{
                         op    = "Replace"
-                        value = @{
-                            active = $false
+                        value = [PSCustomObject]@{
+                            entitlements = $entitlementList
                         }
                     }
                 )
@@ -158,22 +241,22 @@ try {
                     Operations = $operations
                 } | ConvertTo-Json -Depth 10
 
-                $splatDeleteParams = @{
+
+                $splatParams = @{
                     Uri     = "$instanceUri/services/scim/v2/Users/$($actionContext.References.Account)"
                     Headers = $headers
                     Body    = $body
                     Method  = 'PATCH'
                 }
-                $null = Invoke-RestMethod @splatDeleteParams
-
+                $null = Invoke-RestMethod @splatParams
             }
             else {
-                Write-Information "[DryRun] Delete Salesforce-SCIM account with accountReference: [$($actionContext.References.Account)], will be executed during enforcement"
+                Write-Information "[DryRun] Update Salesforce-SCIM permission: [$($actionContext.PermissionDisplayName)] - [$($actionContext.References.Permission.Reference)], will be executed during enforcement"
             }
 
             $outputContext.Success = $true
             $outputContext.AuditLogs.Add([PSCustomObject]@{
-                    Message = "Delete account: [$($actionContext.References.Account)] was successful. Action initiated by: [$($actionContext.Origin)]"
+                    Message = "Update permission [$($actionContext.PermissionDisplayName)] was successful"
                     IsError = $false
                 })
             break
@@ -181,15 +264,14 @@ try {
 
         'NotFound' {
             Write-Information "Salesforce-SCIM account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted"
-            $outputContext.Success = $true
+            $outputContext.Success = $false
             $outputContext.AuditLogs.Add([PSCustomObject]@{
                     Message = "Salesforce-SCIM account: [$($actionContext.References.Account)] could not be found, indicating that it may have been deleted"
-                    IsError = $false
+                    IsError = $true
                 })
             break
         }
     }
-
 }
 catch {
     $outputContext.success = $false
@@ -197,11 +279,11 @@ catch {
     if ($($ex.Exception.GetType().FullName -eq 'Microsoft.PowerShell.Commands.HttpResponseException') -or
         $($ex.Exception.GetType().FullName -eq 'System.Net.WebException')) {
         $errorObj = Resolve-SalesforceError -ErrorObject $ex
-        $auditLogMessage = "Could not delete Salesforce-SCIM account. Error: $($errorObj.FriendlyMessage)"
+        $auditLogMessage = "Could not grant Salesforce-SCIM permission. Error: $($errorObj.FriendlyMessage)"
         Write-Warning "Error at Line '$($errorObj.ScriptLineNumber)': $($errorObj.Line). Error: $($errorObj.ErrorDetails)"
     }
     else {
-        $auditLogMessage = "Could not delete Salesforce-SCIM account. Error: $($_.Exception.Message)"
+        $auditLogMessage = "Could not grant Salesforce-SCIM permission. Error: $($_.Exception.Message)"
         Write-Warning "Error at Line '$($ex.InvocationInfo.ScriptLineNumber)': $($ex.InvocationInfo.Line). Error: $($ex.Exception.Message)"
     }
     $outputContext.AuditLogs.Add([PSCustomObject]@{
