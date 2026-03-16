@@ -4,6 +4,11 @@
 ** for extra information about alert syntax please refer to [Alerts](https://docs.github.com/en/get-started/writing-on-github/getting-started-with-writing-and-formatting-on-github/basic-writing-and-formatting-syntax#alerts)
 -->
 
+> [!WARNING]
+This connector has been updated to meet the requirements of a PowerShell V2 target connector.<br>
+The update was dry-coded and could not be tested in a working environment.<br>
+We recommend thoroughly testing and validating the connector during implementation, as the code may require adjustments.
+
 > [!IMPORTANT]
 > This repository contains the connector and configuration code only. The implementer is responsible to acquire the connection details such as username, password, certificate, etc. You might even need to sign a contract or agreement with the supplier before implementing this connector. Please contact the client's application manager to coordinate the connector requirements.
 
